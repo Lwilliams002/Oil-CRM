@@ -8,15 +8,20 @@ export default function Layout({ userEmail, handleLogout, children }) {
     const toggleSidebar = () => setIsSidebarOpen(open => !open);
 
   return (
-    <Flex height="100vh">
+    <Flex minH="100vh" overflow="hidden">
       {/* Sidebar */}
         <Box w={isSidebarOpen ? '200px' : '60px'} bg="gray.100" borderRightWidth="1px" transition="width .2s">
-          <Sidebar isOpen={isSidebarOpen} userEmail={userEmail} />
+          <Sidebar isOpen={isSidebarOpen} />
         </Box>
       {/* Main area */}
       <Flex direction="column" flex="1">
-        <Header userEmail={userEmail} handleLogout={handleLogout} toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} />
-        <Box p={4} flex="1" overflowY="auto">
+        <Header
+          userEmail={userEmail}
+          handleLogout={handleLogout}
+          toggleSidebar={toggleSidebar}
+          isSidebarOpen={isSidebarOpen}
+        />
+        <Box flex="1" overflowY="auto" p={4}>
           {children}
         </Box>
       </Flex>
