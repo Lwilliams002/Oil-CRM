@@ -185,14 +185,20 @@ export default function PatientDetails() {
   return (
       <Flex direction="column" p={8}>
         {patient.profile_url && (
+          <Box mb={4} textAlign="center">
             <Image
-                src={supabase.storage.from('patient-photos').getPublicUrl(patient.profile_url).data.publicUrl}
-                alt="Profile"
-                boxSize="100px"
-                objectFit="cover"
-                borderRadius="full"
-                mb={4}
+              src={supabase
+                    .storage
+                    .from('patient-photos')
+                    .getPublicUrl(patient.profile_url)
+                    .data.publicUrl}
+              alt={`${patient.first_name} ${patient.last_name}`}
+              boxSize="150px"
+              objectFit="cover"
+              borderRadius="full"
+              mx="auto"
             />
+          </Box>
         )}
         <Heading mb={4}>
           {patient.first_name} {patient.last_name} (ID: {patient.id})
