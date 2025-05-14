@@ -10,7 +10,7 @@ import Consent from './pages/Consent'
 import Terms from './pages/Terms'
 import Login from './pages/Login'
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import Inventory from './pages/Inventory';
+import Inventory from './pages/Inventory.jsx';
 import AdminRoute from './components/AdminRoute';
 
 function App() {
