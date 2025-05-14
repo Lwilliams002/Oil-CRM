@@ -6,7 +6,7 @@ import {BrowserRouter} from "react-router-dom";
 import { ChakraProvider} from "@chakra-ui/react";
 
 createRoot(document.getElementById('root')).render(
-  <BrowserRouter>
+  <BrowserRouter basename={"/Oil-CRM/"}>
       <ChakraProvider>
           <App />
       </ChakraProvider>
