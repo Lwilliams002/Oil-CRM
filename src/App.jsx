@@ -21,7 +21,7 @@ function App() {
         <ProtectedRoute>
           <Layout>
             <Routes>
-              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="/" element= {<Dashboard />}/>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/patients/new" element={<NewPatient />} />
               <Route path="/patients" element={<AllPatients />} />
