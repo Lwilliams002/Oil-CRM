@@ -21,7 +21,7 @@ import {
   FaUserFriends
 } from 'react-icons/fa';
 
-export default function Sidebar({ isOpen = true }) {
+export default function Sidebar({ isOpen = true, userEmail = '' }) {
   const {
     isOpen: isPatientsOpen,
     onToggle: togglePatients
@@ -86,6 +86,13 @@ export default function Sidebar({ isOpen = true }) {
           <HStack spacing="3">
             <FaCalendarPlus />
             {isOpen && <Text>Appointment</Text>}
+          </HStack>
+        </NavLink>
+
+        <NavLink to="/inventory">
+          <HStack spacing="3">
+            <FaTag />  {/* or a suitable inventory icon */}
+            {isOpen && <Text>Inventory</Text>}
           </HStack>
         </NavLink>
 

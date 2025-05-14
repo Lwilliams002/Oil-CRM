@@ -11,8 +11,8 @@ export default function Layout({ userEmail, handleLogout, children }) {
     <Flex height="100vh">
       {/* Sidebar */}
         <Box w={isSidebarOpen ? '200px' : '60px'} bg="gray.100" borderRightWidth="1px" transition="width .2s">
-        <Sidebar isOpen={isSidebarOpen} />
-    </Box>
+          <Sidebar isOpen={isSidebarOpen} userEmail={userEmail} />
+        </Box>
       {/* Main area */}
       <Flex direction="column" flex="1">
         <Header userEmail={userEmail} handleLogout={handleLogout} toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} />

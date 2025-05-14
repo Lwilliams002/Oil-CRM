@@ -10,6 +10,8 @@ import Consent from './pages/Consent'
 import Terms from './pages/Terms'
 import Login from './pages/Login'
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import Inventory from './pages/Inventory';
+import AdminRoute from './components/AdminRoute';
 
 function App() {
   return (
@@ -36,6 +38,14 @@ function App() {
         <Route path="patient-details/:id" element={<PatientDetails />} />
         <Route path="consent/:id" element={<Consent />} />
         <Route path="terms/:id" element={<Terms />} />
+        <Route
+          path="inventory"
+          element={
+            <AdminRoute>
+              <Inventory />
+            </AdminRoute>
+          }
+        />
         {/* Add more nested routes here */}
       </Route>
       {/* Fallback for unknown paths */}
