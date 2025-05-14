@@ -8,7 +8,7 @@ export default function Layout({ userEmail, handleLogout, children }) {
     const toggleSidebar = () => setIsSidebarOpen(open => !open);
 
   return (
-    <Flex minH="100vh" overflow="hidden">
+    <Flex height={["100dvh", null, "100vh"]} overflow="hidden">
       {/* Sidebar */}
         <Box w={isSidebarOpen ? '200px' : '60px'} bg="gray.100" borderRightWidth="1px" transition="width .2s">
           <Sidebar isOpen={isSidebarOpen} />
