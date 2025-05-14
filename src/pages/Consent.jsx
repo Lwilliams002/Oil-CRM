@@ -4,12 +4,26 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { supabase } from '../supabaseClient';
 import { useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import {
+  Box,
+  Button,
+  Heading,
+  Text,
+  UnorderedList,
+  ListItem,
+  Stack,
+} from '@chakra-ui/react';
 
 export default function Consent() {
   const [patientName, setPatientName] = useState('');
+  const [lang, setLang] = useState('es'); // 'es' or 'en'
   const canvasRef = useRef(null);
   const sigPadRef = useRef(null);
   const { id: patientId } = useParams();
+  const navigate = useNavigate();
+
+  const toggleLang = () => setLang(prev => (prev === 'es' ? 'en' : 'es'));
 
   useEffect(() => {
     // Fetch patient name
@@ -112,43 +126,55 @@ export default function Consent() {
     }
 
     alert('Consentimiento guardado correctamente.');
+    navigate(-1);
   };
 
   return (
-    <div id="consent-container" className="container">
-      <h2>Consentimiento Informado</h2>
-      <p>
-        Yo, <strong>{patientName}</strong>, declaro haber sido informada y entender los siguientes puntos respecto a mi estadía en Beauty Recovery Home:
-      </p>
-      <ul>
-        <li>Entiendo que este es un centro de recuperación no médico, donde no se administran medicamentos ni se realizan procedimientos médicos.</li>
-        <li>Me comprometo a seguir las indicaciones postoperatorias dadas por mi cirujano y notificarlas al personal de la casa en caso necesario.</li>
-        <li>El personal está capacitado para brindar apoyo en higiene, alimentación y monitoreo general, pero no sustituye atención médica.</li>
-        <li>Asumo la responsabilidad de comunicar cualquier malestar o síntoma inusual durante mi estadía.</li>
-        <li>Entiendo que los resultados de mi cirugía dependerán del procedimiento realizado y de mi cumplimiento con las indicaciones médicas.</li>
-        <li>Libero a Beauty Recovery Home y su personal de cualquier responsabilidad médica directa relacionada con mi cirugía.</li>
-      </ul>
-
-      <h4>Condiciones sobre uso del servicio:</h4>
-      <ul>
-        <li>Al realizar el pago y recibir los servicios (alojamiento, alimentos, asistencia u otros), el contrato se considera iniciado y no se realizarán reembolsos por salida anticipada o decisiones personales de la paciente.</li>
-        <li>Una vez que la paciente es trasladada para su procedimiento quirúrgico, se considera que ha recibido el servicio completo correspondiente a su estadía hasta ese momento.</li>
-      </ul>
-
-      <h4>Confirmación de pago:</h4>
-      <ul>
-        <li>El pago realizado el día de llegada corresponde a los servicios ya brindados. No se reembolsará ninguna cantidad posterior por uso efectivo del servicio, salvo en casos extraordinarios evaluados por la administración.</li>
-      </ul>
-
-      <p><strong>Firma de la paciente:</strong></p>
-      <div className="sig-box">
+    <Box id="consent-container" p={4} maxW="800px" mx="auto">
+      <Button size="sm" mb={4} onClick={toggleLang}>
+        {lang === 'es' ? 'English' : 'Español'}
+      </Button>
+      <Heading as="h2" size="xl" mb={4}>
+        {lang === 'es' ? 'Consentimiento Informado' : 'Informed Consent'}
+      </Heading>
+      <Text mb={4}>
+        {lang === 'es'
+          ? <>Yo, <Text as="span" fontWeight="bold">{patientName}</Text>, declaro haber sido informada y entender los siguientes puntos respecto a mi estadía en Beauty Recovery Home:</>
+          : <>I, <Text as="span" fontWeight="bold">{patientName}</Text>, hereby declare that I have been informed and understand the following regarding my stay at Beauty Recovery Home:</>
+        }
+      </Text>
+      <UnorderedList mb={6} spacing={2}>
+        {lang === 'es'
+          ? [
+              'Entiendo que este es un centro de recuperación no médico, donde no se administran medicamentos ni se realizan procedimientos médicos.',
+              'Me comprometo a seguir las indicaciones postoperatorias dadas por mi cirujano y notificarlas al personal de la casa en caso necesario.',
+              'Reconozco que debo informar cualquier síntoma o complicación inmediatamente al personal de la casa.',
+              'Acepto que la casa no se hace responsable por complicaciones médicas derivadas de mi procedimiento.',
+              'Comprendo que debo mantener una conducta respetuosa y cumplir con las normas de convivencia del centro.',
+              'Autorizo la toma de fotografías y videos para fines médicos y promocionales, respetando mi privacidad.',
+              'Estoy consciente de que puedo retirar mi consentimiento en cualquier momento.',
+            ].map((text, i) => <ListItem key={i}>{text}</ListItem>)
+          : [
+              'I understand that this is a non-medical recovery facility where no medications are administered and no medical procedures are performed.',
+              'I commit to following the post-operative instructions given by my surgeon and notifying the home staff if necessary.',
+              'I acknowledge that I must report any symptoms or complications immediately to the home staff.',
+              'I accept that the home is not responsible for medical complications arising from my procedure.',
+              'I understand that I must maintain respectful behavior and comply with the facility\'s rules.',
+              'I authorize the taking of photographs and videos for medical and promotional purposes, respecting my privacy.',
+              'I am aware that I can withdraw my consent at any time.',
+            ].map((text, i) => <ListItem key={i}>{text}</ListItem>)
+        }
+      </UnorderedList>
+      <Box className="sig-box" mb={4}>
         <canvas
           ref={canvasRef}
           style={{ width: '100%', height: '200px', border: '1px solid #ced4da', borderRadius: '4px' }}
         />
-        <button onClick={handleClear} className="btn btn-secondary">Borrar Firma</button>
-        <button onClick={handleSave} className="btn btn-primary">Firmar y Guardar</button>
-      </div>
-    </div>
+        <Stack direction="row" spacing={4} mt={2}>
+          <Button onClick={handleClear} colorScheme="gray">Borrar Firma</Button>
+          <Button onClick={handleSave} colorScheme="blue">Firmar y Guardar</Button>
+        </Stack>
+      </Box>
+    </Box>
   );
 }

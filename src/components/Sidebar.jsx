@@ -7,13 +7,18 @@ import {
   Collapse,
   Flex,
   Text,
-  useDisclosure
+  useDisclosure,
+  Tooltip
 } from '@chakra-ui/react';
 import {
   FaThLarge,
   FaUsers,
   FaCalendarPlus,
-  FaTag
+  FaTag,
+  FaChevronDown,
+  FaChevronRight,
+  FaUserPlus,
+  FaUserFriends
 } from 'react-icons/fa';
 
 export default function Sidebar({ isOpen = true }) {
@@ -46,27 +51,35 @@ export default function Sidebar({ isOpen = true }) {
         </NavLink>
 
         <Box w="full">
-          <Flex
-            onClick={togglePatients}
-            align="center"
-            cursor="pointer"
-            userSelect="none"
-          >
-            <FaUsers />
-            {isOpen && <Text ml="2">Patients</Text>}
-          </Flex>
-          {isOpen && (
-            <Collapse in={isPatientsOpen} animateOpacity>
-              <VStack align="start" pl="6" mt="2" spacing="2">
-                <NavLink to="/patients/new">
-                  <Text>New Patient</Text>
-                </NavLink>
-                <NavLink to="/patients">
-                  <Text>All Patients</Text>
-                </NavLink>
-              </VStack>
-            </Collapse>
-          )}
+          {/* Toggle Patients menu */}
+          <Tooltip label="Patients" placement="right" isDisabled={isOpen}>
+            <Flex
+              onClick={togglePatients}
+              align="center"
+              cursor="pointer"
+              userSelect="none"
+            >
+              <FaUsers />
+              {isOpen && <Text ml="2" flex="1">Patients</Text>}
+              {isOpen && (isPatientsOpen ? <FaChevronDown /> : <FaChevronRight />)}
+            </Flex>
+          </Tooltip>
+          <Collapse in={isPatientsOpen} animateOpacity style={{ marginTop: isOpen ? '0.5rem' : '0' }}>
+            <VStack align="start" pl={isOpen ? '6' : '0'} mt="2" spacing="2">
+              <NavLink to="/patients/new">
+                <HStack spacing="3">
+                  <FaUserPlus />
+                  {isOpen ? <Text>New Patient</Text> : <Tooltip label="New Patient"><Box /></Tooltip>}
+                </HStack>
+              </NavLink>
+              <NavLink to="/patients">
+                <HStack spacing="3">
+                  <FaUserFriends />
+                  {isOpen ? <Text>All Patients</Text> : <Tooltip label="All Patients"><Box /></Tooltip>}
+                </HStack>
+              </NavLink>
+            </VStack>
+          </Collapse>
         </Box>
 
         <NavLink to="/appointments/new">
@@ -76,29 +89,6 @@ export default function Sidebar({ isOpen = true }) {
           </HStack>
         </NavLink>
 
-        <Box w="full">
-          <Flex
-            onClick={toggleAuth}
-            align="center"
-            cursor="pointer"
-            userSelect="none"
-          >
-            <FaTag />
-            {isOpen && <Text ml="2">Authentication</Text>}
-          </Flex>
-          {isOpen && (
-            <Collapse in={isAuthOpen} animateOpacity>
-              <VStack align="start" pl="6" mt="2" spacing="2">
-                <NavLink to="/patient-details">
-                  <Text>Patient Details</Text>
-                </NavLink>
-                <NavLink to="/page-login">
-                  <Text>Login</Text>
-                </NavLink>
-              </VStack>
-            </Collapse>
-          )}
-        </Box>
       </VStack>
     </Box>
   );

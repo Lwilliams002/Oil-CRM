@@ -1,4 +1,14 @@
 import React, { useState, useEffect } from 'react';
+// Helper to convert "HH:mm" to 12-hour format with AM/PM
+const formatTime12h = (time24) => {
+  if (!time24) return '';
+  const [hourStr, minute] = time24.split(':');
+  let hour = parseInt(hourStr, 10);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+  return `${hour}:${minute.padStart(2, '0')} ${ampm}`;
+};
 import { supabase } from '../supabaseClient';
 import {
   Box,
@@ -144,7 +154,7 @@ export default function Dashboard() {
               const p = patientsMap[a.patient_id] || {};
               return (
                 <Tr key={a.id}>
-                  <Td>{a.appointment_time}</Td>
+                  <Td>{formatTime12h(a.appointment_time)}</Td>
                   <Td>{a.surgery_date}</Td>
                   <Td>{p.name || 'Unknown'}</Td>
                   <Td>{p.address}</Td>

@@ -88,38 +88,41 @@ export default function PatientDetails() {
     if (!file) return;
 
     // Upload file to supabase storage
-    const filePath = `${id}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from('patient-documents')
-      .upload(filePath, file);
+    try {
+      // 1. Upload file to Supabase Storage
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/\s+/g, '_');
+      const filePath = `${id}/${timestamp}_${safeName}`;
+      const {data: uploadData, error: uploadError} = await supabase
+          .storage
+          .from('patient-documents')
+          .upload(filePath, file);
+      if (uploadError) {
+        console.error('Error fetching patient:', uploadError);
+        alert(uploadError);
+        return;
+      }
+      // 2. Insert metadata into patient_documents (requires template_key)
+      const {error: insertError} = await supabase
+          .from('patient_documents')
+          .insert([{
+            patient_id: id,
+            template_key: 'custom',      // or use a more appropriate key
+            file_url: uploadData.path,
+            file_type: file.name.split('.').pop().toLowerCase()
+          }]);
+      if (insertError) throw insertError;
 
-    if (uploadError) {
-      console.error('Error uploading file:', uploadError);
-      alert('Error uploading file');
-      return;
-    }
-
-    // Insert record into patient_documents
-    const { error: insertError } = await supabase
-      .from('patient_documents')
-      .insert([{ patient_id: id, file_url: filePath, file_name: file.name }]);
-
-    if (insertError) {
-      console.error('Error inserting document record:', insertError);
-      alert('Error saving document');
-      return;
-    }
-
-    // Refresh documents list
-    const { data: docsData, error: docsError } = await supabase
-      .from('patient_documents')
-      .select('*')
-      .eq('patient_id', id);
-
-    if (docsError) {
-      console.error('Error fetching documents:', docsError);
-    } else {
+      // 3. Refresh documents list
+      const {data: docsData, error: docsError} = await supabase
+          .from('patient_documents')
+          .select('*')
+          .eq('patient_id', id);
+      if (docsError) throw docsError;
       setDocuments(docsData);
+    } catch (err) {
+      console.error('Document upload/insert error:', err);
+      alert('Error handling document: ' + err.message);
     }
   };
 
@@ -135,15 +138,15 @@ export default function PatientDetails() {
     e.preventDefault();
     if (!newLog.trim()) return;
 
-    const { error: insertError } = await supabase
-      .from('patient_logs')
-      .insert([{
-        patient_id: id,
-        entry: newLog,
-        blood_pressure: bloodPressure,
-        oxygen_level: oxygenLevel,
-        temperature: temperature
-      }]);
+    const {error: insertError} = await supabase
+        .from('patient_logs')
+        .insert([{
+          patient_id: id,
+          entry: newLog,
+          blood_pressure: bloodPressure,
+          oxygen_level: oxygenLevel,
+          temperature: temperature
+        }]);
 
     if (insertError) {
       console.error('Error inserting log:', insertError);
@@ -158,11 +161,11 @@ export default function PatientDetails() {
     setShowLogForm(false);
 
     // Refresh logs
-    const { data: logsData, error: logsError } = await supabase
-      .from('patient_logs')
-      .select('*')
-      .eq('patient_id', id)
-      .order('created_at', { ascending: false });
+    const {data: logsData, error: logsError} = await supabase
+        .from('patient_logs')
+        .select('*')
+        .eq('patient_id', id)
+        .order('created_at', {ascending: false});
 
     if (logsError) {
       console.error('Error fetching logs:', logsError);
@@ -173,23 +176,23 @@ export default function PatientDetails() {
 
   if (!patient) {
     return (
-      <Box p={8}>
-        <Text fontSize="xl">Loading patient data...</Text>
-      </Box>
+        <Box p={8}>
+          <Text fontSize="xl">Loading patient data...</Text>
+        </Box>
     );
   }
 
   return (
-    <Flex direction="column" p={8}>
+      <Flex direction="column" p={8}>
         {patient.profile_url && (
-          <Image
-            src={supabase.storage.from('patient-photos').getPublicUrl(patient.profile_url).data.publicUrl}
-            alt="Profile"
-            boxSize="100px"
-            objectFit="cover"
-            borderRadius="full"
-            mb={4}
-          />
+            <Image
+                src={supabase.storage.from('patient-photos').getPublicUrl(patient.profile_url).data.publicUrl}
+                alt="Profile"
+                boxSize="100px"
+                objectFit="cover"
+                borderRadius="full"
+                mb={4}
+            />
         )}
         <Heading mb={4}>
           {patient.first_name} {patient.last_name} (ID: {patient.id})
@@ -238,35 +241,35 @@ export default function PatientDetails() {
           <Box flex="1" minW="300px">
             <Heading size="md" mb={4}>Documents</Heading>
             {documents.length === 0 ? (
-              <Text mb={4}>No documents uploaded.</Text>
+                <Text mb={4}>No documents uploaded.</Text>
             ) : (
-              <List spacing={2} mb={4}>
-                {documents.map((doc) => {
-                  // get a publicly accessible URL for each file
-                  const { data: { publicUrl }, error: urlError } = supabase
-                    .storage
-                    .from('patient-documents')
-                    .getPublicUrl(doc.file_url);
-                  if (urlError) console.error('Error generating public URL:', urlError);
+                <List spacing={2} mb={4}>
+                  {documents.map((doc) => {
+                    // get a publicly accessible URL for each file
+                    const {data: {publicUrl}, error: urlError} = supabase
+                        .storage
+                        .from('patient-documents')
+                        .getPublicUrl(doc.file_url);
+                    if (urlError) console.error('Error generating public URL:', urlError);
 
-                  return (
-                    <ListItem key={doc.id}>
-                      <Link href={publicUrl} isExternal color="blue.500">
-                        {doc.file_name ? doc.file_name : doc.file_url}
-                      </Link>
-                    </ListItem>
-                  );
-                })}
-              </List>
+                    return (
+                        <ListItem key={doc.id}>
+                          <Link href={publicUrl} isExternal color="blue.500">
+                            {doc.file_url.split('/').pop()}
+                          </Link>
+                        </ListItem>
+                    );
+                  })}
+                </List>
             )}
             <Button colorScheme="green" onClick={handleAddDocumentClick} mb={2}>
               Add Document
             </Button>
             <Input
-              type="file"
-              ref={fileInputRef}
-              display="none"
-              onChange={handleFileChange}
+                type="file"
+                ref={fileInputRef}
+                display="none"
+                onChange={handleFileChange}
             />
           </Box>
         </Flex>
@@ -274,63 +277,64 @@ export default function PatientDetails() {
         <Box mt={8}>
           <Heading size="md" mb={4}>Change Log</Heading>
           {logs.length === 0 ? (
-            <Text mb={4}>No logs available.</Text>
+              <Text mb={4}>No logs available.</Text>
           ) : (
-            <List spacing={3} mb={4}>
-              {logs.map((log) => (
-                <ListItem key={log.id} borderWidth="1px" borderRadius="md" p={3}>
-                  <Text fontSize="sm" color="gray.500" mb={1}>
-                    {new Date(log.created_at).toLocaleString()}
-                  </Text>
-                  <Text mb={2}>{log.log}</Text>
-                  <Text fontSize="sm">BP: {log.blood_pressure || '—'} | O₂: {log.oxygen_level ?? '—'}% | Temp: {log.temperature ?? '—'}°C</Text>
-                </ListItem>
-              ))}
-            </List>
+              <List spacing={3} mb={4}>
+                {logs.map((log) => (
+                    <ListItem key={log.id} borderWidth="1px" borderRadius="md" p={3}>
+                      <Text fontSize="sm" color="gray.500" mb={1}>
+                        {new Date(log.created_at).toLocaleString()}
+                      </Text>
+                      <Text mb={2}>{log.log}</Text>
+                      <Text fontSize="sm">BP: {log.blood_pressure || '—'} | O₂: {log.oxygen_level ?? '—'}% |
+                        Temp: {log.temperature ?? '—'}°C</Text>
+                    </ListItem>
+                ))}
+              </List>
           )}
           {!showLogForm && (
-            <Button colorScheme="blue" onClick={toggleLogForm}>
-              Add Log Entry
-            </Button>
+              <Button colorScheme="blue" onClick={toggleLogForm}>
+                Add Log Entry
+              </Button>
           )}
           {showLogForm && (
-            <Box as="form" onSubmit={handleLogSubmit} mt={4}>
-              <Textarea
-                value={newLog}
-                onChange={handleLogChange}
-                placeholder="Enter log entry"
-                mb={3}
-                rows={3}
-                isRequired
-              />
-              <Stack direction={["column","row"]} spacing={4} mb={3}>
-                <Input
-                  placeholder="Blood Pressure (e.g. 120/80)"
-                  value={bloodPressure}
-                  onChange={e => setBloodPressure(e.target.value)}
+              <Box as="form" onSubmit={handleLogSubmit} mt={4}>
+                <Textarea
+                    value={newLog}
+                    onChange={handleLogChange}
+                    placeholder="Enter log entry"
+                    mb={3}
+                    rows={3}
+                    isRequired
                 />
-                <Input
-                  placeholder="Oxygen Level (%)"
-                  type="number"
-                  value={oxygenLevel}
-                  onChange={e => setOxygenLevel(e.target.value)}
-                />
-                <Input
-                  placeholder="Temperature (°F)"
-                  type="number"
-                  value={temperature}
-                  onChange={e => setTemperature(e.target.value)}
-                />
-              </Stack>
-              <Stack direction="row" spacing={4}>
-                <Button type="submit" colorScheme="green">
-                  Save Log
-                </Button>
-                <Button type="button" onClick={toggleLogForm} colorScheme="gray">
-                  Cancel
-                </Button>
-              </Stack>
-            </Box>
+                <Stack direction={["column", "row"]} spacing={4} mb={3}>
+                  <Input
+                      placeholder="Blood Pressure (e.g. 120/80)"
+                      value={bloodPressure}
+                      onChange={e => setBloodPressure(e.target.value)}
+                  />
+                  <Input
+                      placeholder="Oxygen Level (%)"
+                      type="number"
+                      value={oxygenLevel}
+                      onChange={e => setOxygenLevel(e.target.value)}
+                  />
+                  <Input
+                      placeholder="Temperature (°F)"
+                      type="number"
+                      value={temperature}
+                      onChange={e => setTemperature(e.target.value)}
+                  />
+                </Stack>
+                <Stack direction="row" spacing={4}>
+                  <Button type="submit" colorScheme="green">
+                    Save Log
+                  </Button>
+                  <Button type="button" onClick={toggleLogForm} colorScheme="gray">
+                    Cancel
+                  </Button>
+                </Stack>
+              </Box>
           )}
         </Box>
       </Flex>
