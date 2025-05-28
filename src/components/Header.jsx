@@ -37,7 +37,7 @@ export default function Header({ toggleSidebar }) {
 
   return (
     <Box as="header" bg="white" boxShadow="md" px={4} py={2}>
-      <Flex align="center" justify="space-between" maxW="1200px" mx="auto">
+      <Flex align="center" justify="space-between" maxW="1500px" mx="auto">
         <IconButton
           aria-label="Toggle sidebar"
           icon={<FaBars />}
