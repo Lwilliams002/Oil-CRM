@@ -153,6 +153,10 @@ export default function Consent() {
               'Comprendo que debo mantener una conducta respetuosa y cumplir con las normas de convivencia del centro.',
               'Autorizo la toma de fotografías y videos para fines médicos y promocionales, respetando mi privacidad.',
               'Estoy consciente de que puedo retirar mi consentimiento en cualquier momento.',
+              'Entiendo que cualquier información de salud personal que comparta con el personal será mantenida confidencial de acuerdo con la Ley de Portabilidad y Responsabilidad del Seguro de Salud (HIPAA), excepto cuando la divulgación sea requerida por ley o por mi seguridad inmediata.',
+              'Beauty Recovery Home es una instalación de recuperación no médica. No se realizan diagnósticos clínicos, tratamientos ni servicios médicos de emergencia en el lugar. Cualquier medicamento debe haber sido recetado previamente por un proveedor médico autorizado. En caso de emergencia, se llamará al 911.',
+              'Doy mi consentimiento para el uso de fotografías o videos tomados durante mi estancia con fines de seguimiento médico o promocionales. Mi identidad será protegida a menos que otorgue un permiso adicional y explícito por escrito. Entiendo que puedo retirar este consentimiento en cualquier momento.',
+              'Autorizo a Beauty Recovery Home a contactar a mi persona de contacto de emergencia designada y compartir información relevante en caso de una emergencia.',
             ].map((text, i) => <ListItem key={i}>{text}</ListItem>)
           : [
               'I understand that this is a non-medical recovery facility where no medications are administered and no medical procedures are performed.',
@@ -162,6 +166,13 @@ export default function Consent() {
               'I understand that I must maintain respectful behavior and comply with the facility\'s rules.',
               'I authorize the taking of photographs and videos for medical and promotional purposes, respecting my privacy.',
               'I am aware that I can withdraw my consent at any time.',
+                'I understand that any personal health information I share with the staff will be kept confidential in accordance with the Health Insurance Portability and Accountability Act (HIPAA), except when disclosure is required by law or for my immediate safety',
+                'Beauty Recovery Home is a non-medical recovery facility. No clinical diagnoses, treatments, or emergency medical services are provided on-site. Any medications must be previously prescribed by a licensed medical provider. In case of emergency, 911 will be called.',
+                'I consent to the use of photographs or videos taken during my stay for medical tracking or promotional purposes. My identity will be protected unless I give additional, explicit permission in writing. I understand I may withdraw this consent at any time.',
+                'I authorize Beauty Recovery Home to contact my designated emergency contact and share relevant information in case of an emergency.',
+
+
+
             ].map((text, i) => <ListItem key={i}>{text}</ListItem>)
         }
       </UnorderedList>
