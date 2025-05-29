@@ -49,7 +49,7 @@ const NewAppointment = () => {
     script1.src = 'https://apis.google.com/js/api.js';
     script1.onload = () => window.gapi.load('client', async () => {
       await window.gapi.client.init({
-        apiKey: 'AIzaSyDSZYqBaWataagonRnEfcnIM6FcjPqVRC0',
+        apiKey: 'AIzaSyAk3dV3IQuyg3jX_M_6-1vBN-yDjXfgP4E',
         discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
       });
     });
@@ -60,7 +60,7 @@ const NewAppointment = () => {
     script2.src = 'https://accounts.google.com/gsi/client';
     script2.onload = () => {
       tokenClient.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: '258618732190-mhkmuc3p5h88psbtmqjfvvpvqn39o317.apps.googleusercontent.com',
+        client_id: '742623411737-d4rr7ubqsbf9bvmvrbo9ia782okiehsf.apps.googleusercontent.com',
         scope: 'https://www.googleapis.com/auth/calendar.events',
         callback: (tokenResponse) => {
           if (tokenResponse.error) {
