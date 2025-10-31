@@ -15,6 +15,21 @@ import {
   Stack,
 } from '@chakra-ui/react';
 
+// robust JSON fetch helper
+async function fetchJSON(url, options) {
+  const res = await fetch(url, options);
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch {
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  if (!res.ok || (data && data.error)) {
+    const msg = (data && (data.error || data.message)) || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 export default function Consent() {
   const [patientName, setPatientName] = useState('');
   const [lang, setLang] = useState('es'); // 'es' or 'en'
@@ -98,35 +113,58 @@ export default function Consent() {
       );
     }
 
+    // Build a Blob from the PDF for upload
     const pdfBlob = pdf.output('blob');
+
+    // Generate filename and content type
     const timestamp = Date.now();
-    const filePath = `documents/consent-${patientId}-${timestamp}.pdf`;
-    const { data: uploadData, error: uploadErr } = await supabase
-      .storage
-      .from('patient-documents')
-      .upload(filePath, pdfBlob, { upsert: true });
-    if (uploadErr) {
-      console.error(uploadErr);
-      alert('No se pudo subir el PDF de consentimiento.');
-      return;
-    }
+    const filename = `consent-${patientId}-${timestamp}.pdf`;
+    const contentType = 'application/pdf';
 
-    const { error: insertErr } = await supabase
-      .from('patient_documents')
-      .insert({
-        patient_id: patientId,
-        template_key: 'consent',
-        file_url: uploadData.path,
-        file_type: 'pdf'
+    try {
+      // 1) Get Supabase JWT to authenticate with our API
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('No hay sesión activa. Inicia sesión nuevamente.');
+
+      // 2) Ask server for a presigned URL (this also creates the DB row for patient_documents)
+      const signResp = await fetchJSON('/api/sign-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ filename, contentType, patientId })
       });
-    if (insertErr) {
-      console.error(insertErr);
-      alert('No se pudo registrar el documento en la base de datos.');
-      return;
-    }
+      // signResp must contain: { uploadUrl, objectKey, docId }
 
-    alert('Consentimiento guardado correctamente.');
-    navigate(-1);
+      // 3) Upload the PDF directly to Wasabi
+      const putRes = await fetch(signResp.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: pdfBlob
+      });
+      if (!putRes.ok) {
+        const txt = await putRes.text();
+        throw new Error(`Error subiendo a Wasabi: HTTP ${putRes.status} ${txt}`);
+      }
+
+      // 4) Finalize the upload (marks the DB row as stored, size, etc.)
+      await fetchJSON('/api/finalize-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ docId: signResp.docId, sizeBytes: pdfBlob.size ?? undefined })
+      });
+
+      alert('Consentimiento guardado correctamente.');
+      navigate(-1);
+    } catch (e) {
+      console.error('Consent upload error:', e);
+      alert(`No se pudo guardar el consentimiento: ${e.message || e}`);
+    }
   };
 
   return (

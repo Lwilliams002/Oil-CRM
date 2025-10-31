@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
@@ -35,22 +33,15 @@ export default function NewPatient() {
     const form = e.target;
     const formData = new FormData(form);
 
-    // 1) Upload photo
-    const photoFile = formData.get('patientPhoto');
-    let profileUrl = null;
-    if (photoFile && photoFile.name) {
-      const { data: photoData, error: photoErr } = await supabase
-        .storage
-        .from('patient-photos')
-        .upload(`photos/${Date.now()}_${photoFile.name}`, photoFile);
-      if (photoErr) {
-        console.error('Photo upload error:', photoErr);
-      } else {
-        profileUrl = photoData.path;
-      }
+    // get Supabase access token for backend auth
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      alert('Not signed in');
+      return;
     }
 
-    // 2) Insert patient record
+    // 1) Insert patient record (profile_url initially null)
     const record = {
       first_name: formData.get('firstName'),
       last_name: formData.get('lastName'),
@@ -64,55 +55,111 @@ export default function NewPatient() {
       height: formData.get('height'),
       address: formData.get('address'),
       history: formData.get('history'),
-      profile_url: profileUrl,
+      profile_url: null,
+      created_by: session?.user?.id || null
     };
 
-    const { data, error } = await supabase
+    const { data: inserted, error: insertErr } = await supabase
       .from('patients')
       .insert([record])
       .select();
 
-    if (error) {
-      console.error('Patient insert failed:', error);
-      alert('Could not save patient: ' + error.message);
+    if (insertErr) {
+      console.error('Patient insert failed:', insertErr);
+      alert('Could not save patient: ' + insertErr.message);
       return;
     }
-    const patientId = data[0]?.id;
+
+    const patientId = inserted?.[0]?.id;
     if (!patientId) {
       alert('Patient created but no ID returned.');
       return;
     }
 
-    // 3) Upload documents
-    const docFiles = formData.getAll('patientDocuments');
-    for (const file of docFiles) {
-      if (!file || !file.name) continue;
-      const timestamp = Date.now();
-      const safeName = file.name
-        .normalize('NFKD')
-        .replace(/[̀-ͯ]/g, '')
-        .replace(/\s+/g, '_')
-        .replace(/[^a-zA-Z0-9_.-]/g, '');
-      const filePath = `documents/${timestamp}_${safeName}`;
-
-      const { data: uploadData, error: uploadErr } = await supabase
-        .storage
-        .from('patient-documents')
-        .upload(filePath, file);
-      if (uploadErr) {
-        console.error('Document upload error:', uploadErr);
-        continue;
+    // helper to sign + upload + finalize one file
+    async function uploadViaPresign(file, patientId) {
+      const signResp = await fetch('/api/sign-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+          patientId
+        })
+      }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
+      console.log('[sign-upload] response:', signResp);
+      if (!signResp || !(signResp.uploadUrl && (signResp.objectKey || signResp.object_key))) {
+        throw new Error('sign-upload did not return expected fields');
       }
-      const storedPath = uploadData.path || uploadData.Key;
-      const fileType = safeName.split('.').pop().toLowerCase();
-      const { error: insertErr } = await supabase
-        .from('patient_documents')
-        .insert([{ patient_id: patientId, file_url: storedPath, file_type: fileType }]);
-      if (insertErr) console.error('Document insert error:', insertErr);
+
+      const put = await fetch(signResp.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file
+      });
+      if (!put.ok) throw new Error('Upload failed');
+
+      await fetch('/api/finalize-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ docId: signResp.docId, sizeBytes: file.size })
+      }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
+
+      const objectKey = signResp.objectKey || signResp.object_key || signResp.Key;
+      if (!objectKey) throw new Error('Missing objectKey in sign-upload response');
+      // normalize for callers
+      signResp.objectKey = objectKey;
+
+      return signResp; // contains { uploadUrl, objectKey, docId }
     }
 
-    alert('Patient saved successfully!');
-    navigate('/all-patients');
+    try {
+      // 2) Upload profile photo to Wasabi (optional)
+      const photoFile = formData.get('patientPhoto');
+      if (photoFile && photoFile.name) {
+        const signed = await uploadViaPresign(photoFile, patientId);
+        const objectKey = signed.objectKey || signed.object_key || signed.Key;
+        if (!objectKey) {
+          console.error('[photo] No objectKey returned, not updating profile_url:', signed);
+        } else {
+          // store the object key on the patient row for avatar retrieval
+          const { error: upErr } = await supabase
+            .from('patients')
+            .update({ profile_url: objectKey })
+            .eq('id', patientId);
+          if (upErr) {
+            console.error('[photo] failed to save profile_url:', upErr);
+            throw upErr;
+          }
+          console.log('[photo] profile_url saved:', objectKey);
+        }
+        console.log('[photo] done');
+      }
+
+      // 3) Upload documents (zero or more)
+      const docFiles = formData.getAll('patientDocuments');
+      for (const file of docFiles) {
+        if (!file || !file.name) continue;
+        try {
+          await uploadViaPresign(file, patientId);
+          // No extra insert needed; your backend already created a row in patient_documents on sign
+        } catch (docErr) {
+          console.error('Document upload error:', docErr);
+        }
+      }
+
+      alert('Patient saved successfully!');
+      navigate('/all-patients');
+    } catch (err) {
+      console.error('Error during upload:', err);
+      alert(`Error saving files: ${err?.message || String(err)}. Check DevTools console for [photo] logs.`);
+    }
   }
 
   return (

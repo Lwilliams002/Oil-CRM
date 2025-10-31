@@ -54,14 +54,16 @@ export default function Dashboard() {
     async function fetchPatients() {
       const { data: patients, error } = await supabase
         .from('patients')
-        .select('id, first_name, last_name, phone, address');
+        .select('id, first_name, last_name, phone, address, profile_url')
+        .order('last_name', { ascending: true });
       if (!error) {
         const map = {};
         patients.forEach(p => {
           map[p.id] = {
             name: `${p.first_name} ${p.last_name}`,
             phone: p.phone || '—',
-            address: p.address || '—'
+            address: p.address || '—',
+            profile_url: p.profile_url || null
           };
         });
         setPatientsMap(map);

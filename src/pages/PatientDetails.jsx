@@ -17,10 +17,78 @@ export default function PatientDetails() {
   const [oxygenLevel, setOxygenLevel] = useState('');
   const [temperature, setTemperature] = useState('');
   const fileInputRef = useRef(null);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [edit, setEdit] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    birthday: '',
+    marital_status: '',
+    sex: '',
+    blood_group: '',
+    weight: '',
+    height: '',
+    address: '',
+    history: ''
+  });
 
   // Get patient id from route parameters and navigation
   const { id } = useParams();
   const navigate = useNavigate();
+
+  async function getAvatarUrl(profileKey) {
+    if (!profileKey) return '';
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return '';
+      const r = await fetch(`/api/sign-download?objectKey=${encodeURIComponent(profileKey)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!r.ok) return '';
+      const { url } = await r.json();
+      return url;
+    } catch (e) {
+      console.error('avatar sign error', e);
+      return '';
+    }
+  }
+
+  async function refreshDocuments() {
+    const { data: docsData, error: docsError } = await supabase
+      .from('patient_documents')
+      .select('id, created_at, original_filename, content_type, size_bytes, status, object_key, file_url')
+      .eq('patient_id', id)
+      .order('created_at', { ascending: false });
+    if (docsError) {
+      console.error('Error fetching documents:', docsError);
+    } else {
+      setDocuments(docsData || []);
+    }
+  }
+
+  async function openDocumentById(docId) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not signed in');
+
+      const r = await fetch(`/api/sign-download?docId=${encodeURIComponent(docId)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e?.error || 'Failed to sign download');
+      }
+      const { url } = await r.json();
+      window.open(url, '_blank');
+    } catch (e) {
+      console.error('Download error:', e);
+      alert(e.message || String(e));
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -40,16 +108,7 @@ export default function PatientDetails() {
       }
 
       // Fetch documents
-      let { data: docsData, error: docsError } = await supabase
-        .from('patient_documents')
-        .select('*')
-        .eq('patient_id', id);
-
-      if (docsError) {
-        console.error('Error fetching documents:', docsError);
-      } else {
-        setDocuments(docsData);
-      }
+      await refreshDocuments();
 
       // Fetch logs
       let { data: logsData, error: logsError } = await supabase
@@ -68,6 +127,35 @@ export default function PatientDetails() {
     fetchData();
   }, [id]);
 
+  useEffect(() => {
+    (async () => {
+      if (!patient?.profile_url) {
+        setAvatarUrl('');
+        return;
+      }
+      const url = await getAvatarUrl(patient.profile_url);
+      setAvatarUrl(url);
+    })();
+  }, [patient?.profile_url]);
+
+  useEffect(() => {
+    if (!patient) return;
+    setEdit({
+      first_name: patient.first_name || '',
+      last_name: patient.last_name || '',
+      email: patient.email || '',
+      phone: patient.phone || '',
+      birthday: patient.birthday ? new Date(patient.birthday).toISOString().slice(0,10) : '',
+      marital_status: patient.marital_status || '',
+      sex: patient.sex || '',
+      blood_group: patient.blood_group || '',
+      weight: patient.weight ?? '',
+      height: patient.height ?? '',
+      address: patient.address || '',
+      history: patient.history || ''
+    });
+  }, [patient]);
+
   const openConsent = () => {
     navigate(`/consent/${id}`);
   };
@@ -83,46 +171,102 @@ export default function PatientDetails() {
     }
   };
 
+  const startEdit = () => setIsEditing(true);
+  const cancelEdit = () => {
+    // reset from current patient values and exit edit mode
+    if (patient) {
+      setEdit({
+        first_name: patient.first_name || '',
+        last_name: patient.last_name || '',
+        email: patient.email || '',
+        phone: patient.phone || '',
+        birthday: patient.birthday ? new Date(patient.birthday).toISOString().slice(0,10) : '',
+        marital_status: patient.marital_status || '',
+        sex: patient.sex || '',
+        blood_group: patient.blood_group || '',
+        weight: patient.weight ?? '',
+        height: patient.height ?? '',
+        address: patient.address || '',
+        history: patient.history || ''
+      });
+    }
+    setIsEditing(false);
+  };
+
+  async function saveEdit() {
+    try {
+      const payload = { ...edit };
+      // normalize empty strings to null where appropriate
+      ['email','phone','marital_status','sex','blood_group','address','history'].forEach(k => {
+        if (payload[k] === '') payload[k] = null;
+      });
+      if (payload.birthday === '') payload.birthday = null;
+      // weight/height numeric normalization
+      if (payload.weight === '') payload.weight = null; else payload.weight = Number(payload.weight);
+      if (payload.height === '') payload.height = null; else payload.height = Number(payload.height);
+
+      const { error } = await supabase
+        .from('patients')
+        .update(payload)
+        .eq('id', id);
+      if (error) throw error;
+
+      // refresh local patient state to reflect saved values
+      setPatient(prev => prev ? { ...prev, ...payload } : prev);
+      setIsEditing(false);
+      alert('Patient details saved.');
+    } catch (e) {
+      console.error('Save patient error:', e);
+      alert('Could not save patient: ' + (e.message || String(e)));
+    }
+  }
+
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Upload file to supabase storage
     try {
-      // 1. Upload file to Supabase Storage
-      const timestamp = Date.now();
-      const safeName = file.name.replace(/\s+/g, '_');
-      const filePath = `${id}/${timestamp}_${safeName}`;
-      const {data: uploadData, error: uploadError} = await supabase
-          .storage
-          .from('patient-documents')
-          .upload(filePath, file);
-      if (uploadError) {
-        console.error('Error fetching patient:', uploadError);
-        alert(uploadError);
-        return;
-      }
-      // 2. Insert metadata into patient_documents (requires template_key)
-      const {error: insertError} = await supabase
-          .from('patient_documents')
-          .insert([{
-            patient_id: id,
-            template_key: 'custom',      // or use a more appropriate key
-            file_url: uploadData.path,
-            file_type: file.name.split('.').pop().toLowerCase()
-          }]);
-      if (insertError) throw insertError;
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not signed in');
 
-      // 3. Refresh documents list
-      const {data: docsData, error: docsError} = await supabase
-          .from('patient_documents')
-          .select('*')
-          .eq('patient_id', id);
-      if (docsError) throw docsError;
-      setDocuments(docsData);
+      // 1) Ask server for a presigned PUT and create a pending DB row
+      const signResp = await fetch('/api/sign-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+          patientId: id
+        })
+      }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
+
+      // 2) PUT directly to Wasabi using the provided uploadUrl
+      const put = await fetch(signResp.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file
+      });
+      if (!put.ok) throw new Error('Upload failed');
+
+      // 3) Finalize the DB record (mark as stored, save size)
+      await fetch('/api/finalize-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ docId: signResp.docId, sizeBytes: file.size })
+      }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
+
+      // 4) Refresh list
+      await refreshDocuments();
     } catch (err) {
-      console.error('Document upload/insert error:', err);
-      alert('Error handling document: ' + err.message);
+      console.error('Document upload error:', err);
+      alert('Error uploading document: ' + (err.message || String(err)));
     }
   };
 
@@ -187,11 +331,7 @@ export default function PatientDetails() {
         {patient.profile_url && (
           <Box mb={4} textAlign="center">
             <Image
-              src={supabase
-                    .storage
-                    .from('patient-photos')
-                    .getPublicUrl(patient.profile_url)
-                    .data.publicUrl}
+              src={avatarUrl}
               alt={`${patient.first_name} ${patient.last_name}`}
               boxSize="150px"
               objectFit="cover"
@@ -206,33 +346,68 @@ export default function PatientDetails() {
 
         <Flex gap={8} flexWrap="wrap">
           <Box flex="1" minW="300px">
-            <Heading size="md" mb={4}>Patient Information</Heading>
-            <TableContainer mb={4}>
-              <Table variant="simple" size="sm">
-                <Tbody>
-                  <Tr>
-                    <Th>First Name</Th>
-                    <Td>{patient.first_name}</Td>
-                  </Tr>
-                  <Tr>
-                    <Th>Last Name</Th>
-                    <Td>{patient.last_name}</Td>
-                  </Tr>
-                  <Tr>
-                    <Th>Email</Th>
-                    <Td>{patient.email}</Td>
-                  </Tr>
-                  <Tr>
-                    <Th>Phone</Th>
-                    <Td>{patient.phone}</Td>
-                  </Tr>
-                  <Tr>
-                    <Th>Date of Birth</Th>
-                    <Td>{patient.birthday ? new Date(patient.birthday).toLocaleDateString() : '—'}</Td>
-                  </Tr>
-                </Tbody>
-              </Table>
-            </TableContainer>
+            <Flex align="center" justify="space-between" mb={4}>
+              <Heading size="md">Patient Information</Heading>
+              {!isEditing ? (
+                <Button size="sm" colorScheme="blue" onClick={startEdit}>Edit</Button>
+              ) : (
+                <Stack direction="row" spacing={2}>
+                  <Button size="sm" colorScheme="green" onClick={saveEdit}>Save</Button>
+                  <Button size="sm" variant="outline" onClick={cancelEdit}>Cancel</Button>
+                </Stack>
+              )}
+            </Flex>
+            {!isEditing ? (
+              <TableContainer mb={4}>
+                <Table variant="simple" size="sm">
+                  <Tbody>
+                    <Tr><Th>First Name</Th><Td>{patient.first_name}</Td></Tr>
+                    <Tr><Th>Last Name</Th><Td>{patient.last_name}</Td></Tr>
+                    <Tr><Th>Email</Th><Td>{patient.email || '—'}</Td></Tr>
+                    <Tr><Th>Phone</Th><Td>{patient.phone || '—'}</Td></Tr>
+                    <Tr><Th>Date of Birth</Th><Td>{patient.birthday ? new Date(patient.birthday).toLocaleDateString() : '—'}</Td></Tr>
+                    <Tr><Th>Marital Status</Th><Td>{patient.marital_status || '—'}</Td></Tr>
+                    <Tr><Th>Gender</Th><Td>{patient.sex || '—'}</Td></Tr>
+                    <Tr><Th>Blood Type</Th><Td>{patient.blood_group || '—'}</Td></Tr>
+                    <Tr><Th>Weight</Th><Td>{patient.weight ?? '—'}</Td></Tr>
+                    <Tr><Th>Height</Th><Td>{patient.height ?? '—'}</Td></Tr>
+                    <Tr><Th>Address</Th><Td>{patient.address || '—'}</Td></Tr>
+                  </Tbody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <Stack spacing={3} mb={4}>
+                <Stack direction={["column","row"]} spacing={3}>
+                  <Input placeholder="First Name" value={edit.first_name} onChange={e => setEdit(v => ({...v, first_name: e.target.value}))} />
+                  <Input placeholder="Last Name" value={edit.last_name} onChange={e => setEdit(v => ({...v, last_name: e.target.value}))} />
+                </Stack>
+                <Stack direction={["column","row"]} spacing={3}>
+                  <Input type="email" placeholder="Email" value={edit.email} onChange={e => setEdit(v => ({...v, email: e.target.value}))} />
+                  <Input placeholder="Phone" value={edit.phone} onChange={e => setEdit(v => ({...v, phone: e.target.value}))} />
+                </Stack>
+                <Stack direction={["column","row"]} spacing={3}>
+                  <Input type="date" placeholder="Birthday" value={edit.birthday} onChange={e => setEdit(v => ({...v, birthday: e.target.value}))} />
+                  <Input placeholder="Marital Status" value={edit.marital_status} onChange={e => setEdit(v => ({...v, marital_status: e.target.value}))} />
+                </Stack>
+                <Stack direction={["column","row"]} spacing={3}>
+                  <Input placeholder="Gender" value={edit.sex} onChange={e => setEdit(v => ({...v, sex: e.target.value}))} />
+                  <Input placeholder="Blood Type (e.g., A+, O-)" value={edit.blood_group} onChange={e => setEdit(v => ({...v, blood_group: e.target.value}))} />
+                </Stack>
+                <Stack direction={["column","row"]} spacing={3}>
+                  <Input type="number" placeholder="Weight" value={edit.weight} onChange={e => setEdit(v => ({...v, weight: e.target.value}))} />
+                  <Input type="number" placeholder="Height" value={edit.height} onChange={e => setEdit(v => ({...v, height: e.target.value}))} />
+                </Stack>
+                <Textarea placeholder="Address" rows={3} value={edit.address} onChange={e => setEdit(v => ({...v, address: e.target.value}))} />
+              </Stack>
+            )}
+            <Heading size="sm" mt={4} mb={2}>Other Details</Heading>
+            {!isEditing ? (
+              <Box borderWidth="1px" borderRadius="md" p={3} bg="gray.50" whiteSpace="pre-wrap">
+                {patient.history || '—'}
+              </Box>
+            ) : (
+              <Textarea rows={4} value={edit.history} onChange={e => setEdit(v => ({...v, history: e.target.value}))} />
+            )}
 
             <Stack direction="row" spacing={4}>
               <Button colorScheme="blue" onClick={openConsent}>
@@ -251,19 +426,19 @@ export default function PatientDetails() {
             ) : (
                 <List spacing={2} mb={4}>
                   {documents.map((doc) => {
-                    // get a publicly accessible URL for each file
-                    const {data: {publicUrl}, error: urlError} = supabase
-                        .storage
-                        .from('patient-documents')
-                        .getPublicUrl(doc.file_url);
-                    if (urlError) console.error('Error generating public URL:', urlError);
+                    const name = doc.original_filename
+                      || (doc.object_key ? String(doc.object_key).split('/').pop() : '')
+                      || (doc.file_url ? String(doc.file_url).split('/').pop() : 'document');
 
                     return (
-                        <ListItem key={doc.id}>
-                          <Link href={publicUrl} isExternal color="blue.500">
-                            {doc.file_url.split('/').pop()}
-                          </Link>
-                        </ListItem>
+                      <ListItem key={doc.id}>
+                        <Button size="sm" variant="link" colorScheme="blue" onClick={() => openDocumentById(doc.id)}>
+                          {name}
+                        </Button>
+                        <Text as="span" ml={2} color="gray.500" fontSize="sm">
+                          {doc.size_bytes ? `• ${(doc.size_bytes/1024).toFixed(1)} KB` : ''} {doc.status && doc.status !== 'stored' ? `• ${doc.status}` : ''}
+                        </Text>
+                      </ListItem>
                     );
                   })}
                 </List>
@@ -291,7 +466,7 @@ export default function PatientDetails() {
                       <Text fontSize="sm" color="gray.500" mb={1}>
                         {new Date(log.created_at).toLocaleString()}
                       </Text>
-                      <Text mb={2}>{log.log}</Text>
+                      <Text mb={2}>{log.entry}</Text>
                       <Text fontSize="sm">BP: {log.blood_pressure || '—'} | O₂: {log.oxygen_level ?? '—'}% |
                         Temp: {log.temperature ?? '—'}°C</Text>
                     </ListItem>

@@ -22,16 +22,16 @@ export default function AllPatients() {
   const [patients, setPatients] = useState([]);
 
   useEffect(() => {
-    // Fetch all patients from Supabase
     async function loadPatients() {
-      const { data, error } = await supabase
-        .from('patients')
-        .select('*')
-        .order('last_name', { ascending: true });
-      if (error) {
-        console.error('Error loading patients:', error);
-      } else {
-        setPatients(data);
+      try {
+        const { data, error } = await supabase
+          .from('patients')
+          .select('*')
+          .order('last_name', { ascending: true });
+        if (error) throw error;
+        setPatients(data || []);
+      } catch (err) {
+        console.error('Error loading patients:', err);
       }
     }
     loadPatients();
@@ -52,6 +52,63 @@ export default function AllPatients() {
     }
   };
 
+  async function getAvatarUrl(profileKey) {
+    if (!profileKey) return '';
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return '';
+      const res = await fetch(`/api/sign-download?objectKey=${encodeURIComponent(profileKey)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return '';
+      const { url } = await res.json();
+      return url;
+    } catch {
+      return '';
+    }
+  }
+
+  // Helper to render a patient row (so hooks are not used in map)
+  function PatientRow({ p }) {
+    const [avatarUrl, setAvatarUrl] = useState('');
+    useEffect(() => {
+      (async () => {
+        const url = await getAvatarUrl(p.profile_url);
+        setAvatarUrl(url);
+      })();
+    }, [p.profile_url]);
+
+    return (
+      <Tr key={p.id}>
+        <Td>
+          <Avatar
+            size="sm"
+            src={avatarUrl}
+            name={`${p.first_name} ${p.last_name}`}
+          />
+        </Td>
+        <Td>{p.first_name}</Td>
+        <Td>{p.last_name}</Td>
+        <Td>
+          <IconButton
+            aria-label="View"
+            icon={<FaEye />}
+            size="sm"
+            mr={2}
+            onClick={() => navigate(`/patient-details/${p.id}`)}
+          />
+          <IconButton
+            aria-label="Delete"
+            icon={<FaTrash />}
+            size="sm"
+            onClick={() => handleDelete(p.id)}
+          />
+        </Td>
+      </Tr>
+    );
+  }
+
   return (
     <Box p={4}>
       <Flex justify="space-between" align="center" mb={4}>
@@ -68,39 +125,9 @@ export default function AllPatients() {
             </Tr>
           </Thead>
           <Tbody>
-            {patients.map(p => {
-              const publicUrl = p.profile_url
-                ? supabase.storage.from('patient-photos').getPublicUrl(p.profile_url).data.publicUrl
-                : '';
-              return (
-                <Tr key={p.id}>
-                  <Td>
-                    <Avatar
-                      size="sm"
-                      src={publicUrl}
-                      name={`${p.first_name} ${p.last_name}`}
-                    />
-                  </Td>
-                  <Td>{p.first_name}</Td>
-                  <Td>{p.last_name}</Td>
-                  <Td>
-                    <IconButton
-                      aria-label="View"
-                      icon={<FaEye />}
-                      size="sm"
-                      mr={2}
-                      onClick={() => navigate(`/patient-details/${p.id}`)}
-                    />
-                    <IconButton
-                      aria-label="Delete"
-                      icon={<FaTrash />}
-                      size="sm"
-                      onClick={() => handleDelete(p.id)}
-                    />
-                  </Td>
-                </Tr>
-              );
-            })}
+            {patients.map(p => (
+              <PatientRow key={p.id} p={p} />
+            ))}
           </Tbody>
         </Table>
       </TableContainer>

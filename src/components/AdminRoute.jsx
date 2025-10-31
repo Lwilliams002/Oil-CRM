@@ -33,7 +33,7 @@ export default function AdminRoute({ children }) {
   }
 
   // only allow specific admin email
-  if (session.user.email !== "admin@gmail.com") {
+  if (session.user.email !== "oiladmin@gmail.com") {
     // redirect non-admin users
     return <Navigate to="/login" replace />;
   }

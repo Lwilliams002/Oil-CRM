@@ -22,3 +22,48 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+server.env
+
+# Build outputs
+build/
+coverage/
+
+# Logs and caches
+.cache/
+.next/
+out/
+.tmp/
+
+# OS / IDE artifacts
+Thumbs.db
+*.iml
+*.tmp
+
+# Local data / runtime files
+*.pid
+*.seed
+*.pid.lock
+
+# Dependency directories
+server/node_modules
+client/node_modules
+
+# Supabase and Wasabi keys backup (never commit)
+*.key
+*.pem
+*.p12
+
+# Local test data
+__tests__/temp/
+__mocks__/
+
+# Misc
+.n8n/
+wasabi-test/

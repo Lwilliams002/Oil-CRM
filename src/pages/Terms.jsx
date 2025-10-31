@@ -16,6 +16,21 @@ import {
   Stack,
 } from '@chakra-ui/react';
 
+// robust JSON fetch helper
+async function fetchJSON(url, options) {
+  const res = await fetch(url, options);
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch {
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  if (!res.ok || (data && data.error)) {
+    const msg = (data && (data.error || data.message)) || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 export default function Terms() {
   const [patientName, setPatientName] = useState('');
   const [lang, setLang] = useState('es');
@@ -200,31 +215,58 @@ export default function Terms() {
       );
     }
 
-    const blob = pdf.output('blob');
+    // Build a Blob from the PDF for upload
+    const pdfBlob = pdf.output('blob');
+
+    // Generate filename and content type
     const timestamp = Date.now();
-    const filePath = `documents/terms-${patientId}-${timestamp}.pdf`;
-    const {data: uploadData, error: upErr} = await supabase
-        .storage
-        .from('patient-documents')
-        .upload(filePath, blob, {upsert: true});
-    if (upErr) {
-      alert(lang === 'es' ? 'Error subiendo PDF de términos.' : 'Error uploading terms PDF.');
-      return;
+    const filename = `terms-${patientId}-${timestamp}.pdf`;
+    const contentType = 'application/pdf';
+
+    try {
+      // 1) Get Supabase JWT to authenticate with our API
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error(lang === 'es' ? 'No hay sesión activa. Inicia sesión nuevamente.' : 'No active session. Please sign in again.');
+
+      // 2) Ask server for a presigned URL (also creates DB row in patient_documents)
+      const signResp = await fetchJSON('/api/sign-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ filename, contentType, patientId, templateKey: 'terms' })
+      });
+      // signResp must contain: { uploadUrl, objectKey, docId }
+
+      // 3) Upload the PDF directly to Wasabi
+      const putRes = await fetch(signResp.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: pdfBlob
+      });
+      if (!putRes.ok) {
+        const txt = await putRes.text();
+        throw new Error((lang === 'es' ? 'Error subiendo a Wasabi: ' : 'Error uploading to Wasabi: ') + `HTTP ${putRes.status} ${txt}`);
+      }
+
+      // 4) Finalize the upload (marks the DB row as stored, records size)
+      await fetchJSON('/api/finalize-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ docId: signResp.docId, sizeBytes: pdfBlob.size ?? undefined })
+      });
+
+      alert(lang === 'es' ? 'Términos firmados y guardados.' : 'Terms signed and saved.');
+      navigate(-1);
+    } catch (e) {
+      console.error('Terms upload error:', e);
+      alert((lang === 'es' ? 'No se pudo guardar los términos: ' : 'Could not save terms: ') + (e.message || String(e)));
     }
-    const {error: insErr} = await supabase
-        .from('patient_documents')
-        .insert({
-          patient_id: patientId,
-          template_key: 'terms',
-          file_url: uploadData.path,
-          file_type: 'pdf',
-        });
-    if (insErr) {
-      alert(lang === 'es' ? 'Error registrando documento.' : 'Error registering document.');
-      return;
-    }
-    alert(lang === 'es' ? 'Términos firmados y guardados.' : 'Terms signed and saved.');
-    navigate(-1);
   };
 
   return (
