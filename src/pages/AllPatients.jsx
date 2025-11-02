@@ -17,6 +17,8 @@ import {
 } from '@chakra-ui/react';
 import { FaEye, FaTrash } from 'react-icons/fa';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5174';
+
 export default function AllPatients() {
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
@@ -24,12 +26,24 @@ export default function AllPatients() {
   useEffect(() => {
     async function loadPatients() {
       try {
-        const { data, error } = await supabase
-          .from('patients')
-          .select('*')
-          .order('last_name', { ascending: true });
-        if (error) throw error;
-        setPatients(data || []);
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) throw new Error('Not authenticated');
+        const url = `${API}/api/patients`;
+        const res = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`Failed to fetch patients (HTTP ${res.status}): ${txt.slice(0,180)}`);
+        }
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          const txt = await res.text();
+          throw new Error(`Expected JSON but got: ${txt.slice(0,180)}`);
+        }
+        const data = await res.json();
+        setPatients(Array.isArray(data) ? data : (data || []));
       } catch (err) {
         console.error('Error loading patients:', err);
       }
@@ -58,7 +72,7 @@ export default function AllPatients() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) return '';
-      const res = await fetch(`/api/sign-download?objectKey=${encodeURIComponent(profileKey)}`, {
+      const res = await fetch(`${API}/api/sign-download?objectKey=${encodeURIComponent(profileKey)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) return '';

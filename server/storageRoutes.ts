@@ -188,4 +188,45 @@ router.get("/sign-download", async (req, res) => {
   }
 });
 
+// Debug: confirm the caller's user id from Supabase JWT
+router.get('/whoami', async (req, res) => {
+  try {
+    const userId = await getUserIdFromRequest(req);
+    return res.json({ userId });
+  } catch (e: any) {
+    return sendError(res, e);
+  }
+});
+
+// GET /api/patients — list patients for the authenticated user
+router.get('/patients', async (req, res) => {
+  try {
+    const userId = await getUserIdFromRequest(req);
+
+    const { data, error } = await supabaseAdmin
+      .from('patients')
+      .select('*')
+      .eq('created_by', userId)
+      .order('last_name', { ascending: true });
+
+    if (error) throw error;
+    return res.json(data || []);
+  } catch (e: any) {
+    return sendError(res, e);
+  }
+});
+
+// TEMP: list registered router paths for debugging
+router.get('/_routes', (req, res) => {
+  try {
+    // @ts-ignore access internal stack for quick debug only
+    const paths = (router as any).stack
+      .map((l: any) => l.route && l.route.path)
+      .filter(Boolean);
+    res.json({ routes: paths });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || 'debug error' });
+  }
+});
+
 export default router;

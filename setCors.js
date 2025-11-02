@@ -41,7 +41,7 @@ const corsConfig = {
   CORSConfiguration: {
     CORSRules: [
       {
-        AllowedOrigins: ['http://localhost:5173', 'https://YOUR-PROD-DOMAIN'],
+        AllowedOrigins: ['http://localhost:5173', 'https://lwilliams002.github.io'],
         AllowedMethods: ['GET', 'PUT', 'HEAD'],
         AllowedHeaders: ['*'],
         ExposeHeaders: ['ETag'],
