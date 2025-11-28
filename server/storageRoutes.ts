@@ -59,78 +59,99 @@ async function getUserIdFromRequest(req: express.Request) {
 // POST /api/sign-upload {filename, contentType, patientId}
 // returns { uploadUrl, objectKey, docId }
 router.post("/sign-upload", async (req, res) => {
-    try {
-        const userId = await getUserIdFromRequest(req);
-        const { filename, contentType, patientId } = req.body as {
-            filename: string; contentType: string; patientId: string;
-        };
+  try {
+    const userId = await getUserIdFromRequest(req);
+    const { filename, contentType, patientId } = req.body as {
+      filename: string;
+      contentType?: string;
+      patientId: string;
+    };
 
-        if (!filename || !patientId) throw new Error('filename and patientId are required');
-        const ct = contentType || 'application/octet-stream';
-
-        const admin = await isAdmin(userId);
-        const { data: patient, error: pErr } = await supabaseAdmin
-          .from('patients')
-          .select('id, created_by')
-          .eq('id', patientId)
-          .single();
-        if (pErr || !patient) throw new Error('Patient not found');
-        if (patient.created_by !== userId && !admin) throw new Error('Forbidden');
-
-        // object key convention
-        const objectKey = `patient-docs/${patientId}/${crypto.randomUUID()}-${filename}`;
-
-        // presign PUT
-        const cmd = new PutObjectCommand({
-            Bucket: process.env.S3_BUCKET!,
-            Key: objectKey,
-            ContentType: ct
-        });
-        const uploadUrl = await getSignedUrl(s3, cmd, { expiresIn: 60 * 5 });
-
-        // create pending row
-        const { data, error } = await supabaseAdmin
-            .from("patient_documents")
-            .insert({
-                patient_id: patientId,
-                owner_user_id: userId,
-                object_key: objectKey,
-                bucket: process.env.S3_BUCKET!,
-                content_type: ct,
-                status: "pending",
-                original_filename: filename
-            })
-            .select("id")
-            .single();
-
-        if (error) throw error;
-        res.json({ uploadUrl, objectKey, docId: data.id });
-    } catch (e: any) {
-        return sendError(res, e);
+    if (!filename || !patientId) {
+      throw new Error("filename and patientId are required");
     }
+
+    const ct = contentType || "application/octet-stream";
+
+    // basic authorization: caller must own the patient or be admin
+    const admin = await isAdmin(userId);
+    const { data: patient, error: pErr } = await supabaseAdmin
+      .from("patients")
+      .select("id, created_by")
+      .eq("id", patientId)
+      .single();
+
+    if (pErr || !patient) {
+      throw new Error("Patient not found");
+    }
+    if (patient.created_by !== userId && !admin) {
+      throw new Error("Forbidden");
+    }
+
+    // object key convention in Wasabi
+    const safeName = String(filename)
+      .normalize("NFKD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/\s+/g, "_")
+      .replace(/[^a-zA-Z0-9_.-]/g, "");
+    const objectKey = `patient-docs/${patientId}/${crypto.randomUUID()}-${safeName}`;
+
+    // presign PUT
+    const cmd = new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET!,
+      Key: objectKey,
+      ContentType: ct,
+    });
+    const uploadUrl = await getSignedUrl(s3, cmd, { expiresIn: 60 * 5 });
+
+    // figure out a simple file type from the extension
+    const fileType =
+      safeName.split(".").pop()?.toLowerCase() || "bin";
+
+    // create row in patient_documents using the original schema
+    const { data, error } = await supabaseAdmin
+      .from("patient_documents")
+      .insert({
+        patient_id: patientId,
+        file_url: objectKey, // store Wasabi key here
+        file_type: fileType,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return res.json({
+      uploadUrl,
+      objectKey,
+      docId: data.id,
+    });
+  } catch (e: any) {
+    return sendError(res, e);
+  }
 });
 
-// POST /api/finalize-upload {docId, sizeBytes, sha256?}
-// marks the row as stored after client PUT succeeds
+// POST /api/finalize-upload {docId, sizeBytes}
+// For now we don't update extra metadata to avoid schema mismatch; the file is already in Wasabi.
 router.post("/finalize-upload", async (req, res) => {
-    try {
-        const userId = await getUserIdFromRequest(req);
-        const { docId, sizeBytes, sha256 } = req.body;
-
-        if (!docId) throw new Error('docId is required');
-
-        const admin = await isAdmin(userId);
-        const q = supabaseAdmin
-            .from("patient_documents")
-            .update({ status: "stored", size_bytes: sizeBytes, sha256 })
-            .eq("id", docId);
-        if (!admin) q.eq("owner_user_id", userId);
-        const { error } = await q;
-        if (error) throw error;
-        res.json({ ok: true });
-    } catch (e: any) {
-        return sendError(res, e);
+  try {
+    const userId = await getUserIdFromRequest(req);
+    if (!userId) {
+      throw new Error("Unauthorized");
     }
+
+    const { docId } = req.body || {};
+    if (!docId) {
+      throw new Error("docId is required");
+    }
+
+    // If later you add columns like size_bytes, you can update them here.
+    return res.json({ ok: true });
+  } catch (e: any) {
+    return sendError(res, e);
+  }
 });
 
 // GET /api/sign-download?docId=...

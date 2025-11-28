@@ -15,6 +15,8 @@ import {
   VStack,
 } from '@chakra-ui/react';
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
 export default function NewPatient() {
   const navigate = useNavigate();
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -55,6 +57,34 @@ export default function NewPatient() {
       height: formData.get('height'),
       address: formData.get('address'),
       history: formData.get('history'),
+      origin_location: formData.get('originLocation'),
+      companion_name: formData.get('companionName'),
+      surgery_date: formData.get('surgeryDate'),
+      clinic: formData.get('clinic'),
+      coordinator: formData.get('coordinator'),
+      surgeon: formData.get('surgeon'),
+      procedures: formData.get('procedures'),
+      needs_drains: formData.get('needsDrains'),
+      needs_next_day_visit: formData.get('needsNextDayVisit'),
+      arrival_miami: formData.get('arrivalMiami'),
+      arrival_house: formData.get('arrivalHouse'),
+      departure_date: formData.get('departureDate'),
+      package_selected: formData.get('packageSelected'),
+      faja_size: formData.get('fajaSize'),
+      transfer_airport_to_house: formData.get('transferAirportToHouse'),
+      transfer_house_to_clinic: formData.get('transferHouseToClinic'),
+      allergies: formData.get('allergies'),
+      medical_conditions: formData.get('medicalConditions'),
+      current_medications: formData.get('currentMedications'),
+      emergency_contact: formData.get('emergencyContact'),
+      add_lymphatic_massages: formData.get('addLymphaticMassages'),
+      requested_accessories: formData.get('requestedAccessories'),
+      dietary_restrictions: formData.get('dietaryRestrictions'),
+      deposit_paid: formData.get('depositPaid'),
+      consents_sent: formData.get('consentsSent'),
+      consents_signed: formData.get('consentsSigned'),
+      no_delivery_understood: formData.get('noDeliveryUnderstood'),
+      massages_not_included_understood: formData.get('massagesNotIncludedUnderstood'),
       profile_url: null,
       created_by: session?.user?.id || null
     };
@@ -78,7 +108,8 @@ export default function NewPatient() {
 
     // helper to sign + upload + finalize one file
     async function uploadViaPresign(file, patientId) {
-      const signResp = await fetch('/api/sign-upload', {
+      // 1) Call /sign-upload
+      const resp = await fetch(`${API_BASE}/sign-upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -89,34 +120,71 @@ export default function NewPatient() {
           contentType: file.type || 'application/octet-stream',
           patientId
         })
-      }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
+      });
+
+      let raw;
+      let signResp;
+      try {
+        raw = await resp.text();               // read body once
+        signResp = raw ? JSON.parse(raw) : {}; // try to parse JSON
+      } catch (e) {
+        console.error('[sign-upload] non-JSON response:', raw);
+        throw new Error(`sign-upload returned non-JSON body (status ${resp.status})`);
+      }
+
+      if (!resp.ok) {
+        console.error('[sign-upload] error payload:', signResp);
+        throw new Error(signResp?.error || `sign-upload failed (status ${resp.status})`);
+      }
+
       console.log('[sign-upload] response:', signResp);
+
       if (!signResp || !(signResp.uploadUrl && (signResp.objectKey || signResp.object_key))) {
         throw new Error('sign-upload did not return expected fields');
       }
 
+      // 2) Upload file to Wasabi with the pre-signed URL
       const put = await fetch(signResp.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
         body: file
       });
-      if (!put.ok) throw new Error('Upload failed');
+      if (!put.ok) {
+        const txt = await put.text().catch(() => '');
+        console.error('[wasabi PUT] error body:', txt);
+        throw new Error(`Upload failed (status ${put.status})`);
+      }
 
-      await fetch('/api/finalize-upload', {
+      // 3) Finalize on backend (update metadata, size, etc.)
+      const finalizeResp = await fetch(`${API_BASE}/finalize-upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ docId: signResp.docId, sizeBytes: file.size })
-      }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
+      });
+
+      let finalizeRaw;
+      let finalizeJson;
+      try {
+        finalizeRaw = await finalizeResp.text();
+        finalizeJson = finalizeRaw ? JSON.parse(finalizeRaw) : {};
+      } catch (e) {
+        console.error('[finalize-upload] non-JSON response:', finalizeRaw);
+        throw new Error(`finalize-upload returned non-JSON body (status ${finalizeResp.status})`);
+      }
+
+      if (!finalizeResp.ok) {
+        console.error('[finalize-upload] error payload:', finalizeJson);
+        throw new Error(finalizeJson?.error || `finalize-upload failed (status ${finalizeResp.status})`);
+      }
 
       const objectKey = signResp.objectKey || signResp.object_key || signResp.Key;
       if (!objectKey) throw new Error('Missing objectKey in sign-upload response');
-      // normalize for callers
-      signResp.objectKey = objectKey;
 
-      return signResp; // contains { uploadUrl, objectKey, docId }
+      signResp.objectKey = objectKey;
+      return signResp; // { uploadUrl, objectKey, docId, ... }
     }
 
     try {
@@ -165,7 +233,7 @@ export default function NewPatient() {
   return (
     <Box p={4}>
       <Heading as="h4" size="md" color="blue.500" mb={4}>
-        New Patient
+        Nueva reserva de paciente
       </Heading>
       <VStack as="form" onSubmit={handleSubmit} spacing={4} align="stretch" id="new-patient-form">
         <FormControl>
@@ -241,9 +309,196 @@ export default function NewPatient() {
           <Textarea name="address" rows={3} placeholder="Address" />
         </FormControl>
         <FormControl>
-          <FormLabel>Patient History</FormLabel>
-          <Textarea name="history" rows={3} placeholder="Patient History" />
+          <FormLabel>Historial del paciente / Comentarios</FormLabel>
+          <Textarea name="history" rows={3} placeholder="Anota cualquier detalle relevante del paciente" />
         </FormControl>
+
+        {/* Datos de procedencia y acompañante */}
+        <FormControl>
+          <FormLabel>Estado / Ciudad de procedencia</FormLabel>
+          <Input name="originLocation" placeholder="Ej. Houston, Texas" />
+        </FormControl>
+
+        <FormControl>
+          <FormLabel>Acompañante (si aplica)</FormLabel>
+          <Input name="companionName" placeholder="Nombre del acompañante" />
+        </FormControl>
+
+        {/* Datos de cirugía */}
+        <FormControl>
+          <FormLabel>Fecha de cirugía</FormLabel>
+          <Input name="surgeryDate" type="date" />
+        </FormControl>
+
+        <FormControl>
+          <FormLabel>Clínica</FormLabel>
+          <Input name="clinic" placeholder="Nombre de la clínica" />
+        </FormControl>
+
+        <FormControl>
+          <FormLabel>Coordinadora</FormLabel>
+          <Input name="coordinator" placeholder="Nombre de la coordinadora (si aplica)" />
+        </FormControl>
+
+        <FormControl>
+          <FormLabel>Doctor (cirujano)</FormLabel>
+          <Input name="surgeon" placeholder="Nombre del cirujano" />
+        </FormControl>
+
+        <FormControl>
+          <FormLabel>Procedimiento(s)</FormLabel>
+          <Textarea name="procedures" rows={2} placeholder="Ej. Lipo 360, BBL, abdominoplastia" />
+        </FormControl>
+
+        <Stack direction={['column', 'row']} spacing={4}>
+          <FormControl>
+            <FormLabel>¿Necesitará drenajes?</FormLabel>
+            <Select name="needsDrains" placeholder="Selecciona una opción">
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </Select>
+          </FormControl>
+          <FormControl>
+            <FormLabel>¿Requiere visita postoperatoria al día siguiente?</FormLabel>
+            <Select name="needsNextDayVisit" placeholder="Selecciona una opción">
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </Select>
+          </FormControl>
+        </Stack>
+
+        {/* Fechas de llegada y salida */}
+        <Stack direction={['column', 'row']} spacing={4}>
+          <FormControl>
+            <FormLabel>Fecha de llegada a Miami</FormLabel>
+            <Input name="arrivalMiami" type="date" />
+          </FormControl>
+          <FormControl>
+            <FormLabel>Fecha de llegada a la casa</FormLabel>
+            <Input name="arrivalHouse" type="date" />
+          </FormControl>
+          <FormControl>
+            <FormLabel>Fecha de salida</FormLabel>
+            <Input name="departureDate" type="date" />
+          </FormControl>
+        </Stack>
+
+        {/* Paquete y talla de faja */}
+        <Stack direction={['column', 'row']} spacing={4}>
+          <FormControl>
+            <FormLabel>Paquete elegido</FormLabel>
+            <Input name="packageSelected" placeholder="Ej. Paquete básico, VIP, etc." />
+          </FormControl>
+          <FormControl>
+            <FormLabel>Talla de faja</FormLabel>
+            <Input name="fajaSize" placeholder="Ej. S, M, L o número" />
+          </FormControl>
+        </Stack>
+
+        {/* Transporte */}
+        <Stack direction={['column', 'row']} spacing={4}>
+          <FormControl>
+            <FormLabel>Transporte aeropuerto → casa</FormLabel>
+            <Select name="transferAirportToHouse" placeholder="Selecciona una opción">
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </Select>
+          </FormControl>
+          <FormControl>
+            <FormLabel>Transporte casa → clínica</FormLabel>
+            <Select name="transferHouseToClinic" placeholder="Selecciona una opción">
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </Select>
+          </FormControl>
+        </Stack>
+
+        {/* Alergias y condiciones médicas */}
+        <FormControl>
+          <FormLabel>Alergias</FormLabel>
+          <Textarea name="allergies" rows={2} placeholder="Alergias a medicamentos, alimentos, etc." />
+        </FormControl>
+
+        <FormControl>
+          <FormLabel>Condiciones médicas</FormLabel>
+          <Textarea name="medicalConditions" rows={2} placeholder="Ej. hipertensión, diabetes, etc." />
+        </FormControl>
+
+        <FormControl>
+          <FormLabel>Medicamentos actuales</FormLabel>
+          <Textarea name="currentMedications" rows={2} placeholder="Lista de medicamentos que toma actualmente" />
+        </FormControl>
+
+        {/* Contacto de emergencia */}
+        <FormControl>
+          <FormLabel>Contacto de emergencia</FormLabel>
+          <Textarea
+            name="emergencyContact"
+            rows={2}
+            placeholder="Nombre, relación y teléfono del contacto de emergencia"
+          />
+        </FormControl>
+
+        {/* Masajes y accesorios */}
+        <Stack direction={['column', 'row']} spacing={4}>
+          <FormControl>
+            <FormLabel>¿Desea agregar masajes linfáticos?</FormLabel>
+            <Select name="addLymphaticMassages" placeholder="Selecciona una opción">
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </Select>
+          </FormControl>
+          <FormControl>
+            <FormLabel>Accesorios solicitados</FormLabel>
+            <Input name="requestedAccessories" placeholder="Ej. almohadas, tabla, espumas, etc." />
+          </FormControl>
+        </Stack>
+
+        <FormControl>
+          <FormLabel>Restricciones alimentarias</FormLabel>
+          <Textarea name="dietaryRestrictions" rows={2} placeholder="Ej. vegetariana, sin lactosa, alergia al gluten, etc." />
+        </FormControl>
+
+        {/* Depósito y consentimientos */}
+        <Stack direction={['column', 'row']} spacing={4}>
+          <FormControl>
+            <FormLabel>Depósito pagado</FormLabel>
+            <Input name="depositPaid" placeholder="Sí/No y monto, ej. Sí - $200" />
+          </FormControl>
+          <FormControl>
+            <FormLabel>Consentimientos enviados</FormLabel>
+            <Select name="consentsSent" placeholder="Selecciona una opción">
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </Select>
+          </FormControl>
+          <FormControl>
+            <FormLabel>Consentimientos firmados</FormLabel>
+            <Select name="consentsSigned" placeholder="Selecciona una opción">
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </Select>
+          </FormControl>
+        </Stack>
+
+        {/* Políticas entendidas */}
+        <Stack direction={['column', 'row']} spacing={4}>
+          <FormControl>
+            <FormLabel>Política de NO DELIVERY entendida</FormLabel>
+            <Select name="noDeliveryUnderstood" placeholder="Selecciona una opción">
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </Select>
+          </FormControl>
+          <FormControl>
+            <FormLabel>Masajes NO incluidos entendidos</FormLabel>
+            <Select name="massagesNotIncludedUnderstood" placeholder="Selecciona una opción">
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </Select>
+          </FormControl>
+        </Stack>
+
         <FormControl>
           <FormLabel>Upload Documents</FormLabel>
           <Input

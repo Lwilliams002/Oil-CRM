@@ -84,34 +84,61 @@ export default function Dashboard() {
     fetchAppointments();
   }, []);
 
-  const deleteAppointment = async id => {
-    if (!window.confirm('Delete this appointment?')) return;
-    const { error } = await supabase
-      .from('appointments')
-      .delete()
-      .eq('id', id);
-    if (error) {
-      alert('Could not delete appointment: ' + error.message);
-    } else {
-      setAppointments(apps => apps.filter(a => a.id !== id));
+
+  const deleteAppointment = async (id) => {
+    console.log('[Dashboard] delete button clicked for', id);
+
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('[Dashboard] delete error:', error);
+        alert('Could not delete appointment: ' + error.message);
+        return;
+      }
+
+      setAppointments((apps) => apps.filter((a) => a.id !== id));
+    } catch (err) {
+      console.error('[Dashboard] delete exception:', err);
+      alert('Unexpected error deleting appointment.');
     }
   };
 
-  const completeAppointment = async id => {
-    if (!window.confirm('Mark this appointment as completed?')) return;
-    const { error } = await supabase
-      .from('appointments')
-      .update({ status: 'completed' })
-      .eq('id', id);
-    if (error) {
-      alert('Could not update status: ' + error.message);
-    } else {
-      setAppointments(apps =>
-        apps.map(a => (a.id === id ? { ...a, status: 'completed' } : a))
+  const completeAppointment = async (id, currentStatus) => {
+    console.log('[Dashboard] complete button clicked for', id, 'currentStatus=', currentStatus);
+
+    // We only ever mark as completed from the dashboard button
+    const nextStatus = 'completed';
+
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .update({ status: nextStatus })
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      console.log('[Dashboard] update result:', { data, error });
+
+      if (error) {
+        console.error('[Dashboard] complete error:', error);
+        alert('Could not update status: ' + error.message);
+        return;
+      }
+
+      setAppointments((apps) =>
+        apps.map((a) =>
+          a.id === id ? { ...a, status: nextStatus } : a
+        )
       );
+    } catch (err) {
+      console.error('[Dashboard] complete exception:', err);
+      alert('Unexpected error updating status.');
     }
   };
-
   return (
     <Container maxW="container.xl" py={6}>
       <Box mb={6}>
@@ -170,7 +197,7 @@ export default function Dashboard() {
                     <Button
                       size="sm"
                       colorScheme="green"
-                      onClick={() => completeAppointment(a.id)}
+                      onClick={() => completeAppointment(a.id, a.status)}
                       isDisabled={a.status === 'completed'}
                       mr={2}
                     >

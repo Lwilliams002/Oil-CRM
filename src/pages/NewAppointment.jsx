@@ -26,6 +26,7 @@ const NewAppointment = () => {
     procedure: '',
     motif: ''
   });
+  const toast = useToast();
   const tokenClient = useRef(null);
   const pendingEvent = useRef(null);
 
@@ -49,7 +50,7 @@ const NewAppointment = () => {
     script1.src = 'https://apis.google.com/js/api.js';
     script1.onload = () => window.gapi.load('client', async () => {
       await window.gapi.client.init({
-        apiKey: 'AIzaSyAk3dV3IQuyg3jX_M_6-1vBN-yDjXfgP4E',
+        apiKey: 'AIzaSyAn2VjH6S102h9-Va-NFV76c336-FMK_CM',
         discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
       });
     });
@@ -60,7 +61,7 @@ const NewAppointment = () => {
     script2.src = 'https://accounts.google.com/gsi/client';
     script2.onload = () => {
       tokenClient.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: '742623411737-d4rr7ubqsbf9bvmvrbo9ia782okiehsf.apps.googleusercontent.com',
+        client_id: '260971628736-e9cei969isk562anh9ukesidj0s3vs3t.apps.googleusercontent.com',
         scope: 'https://www.googleapis.com/auth/calendar.events',
         callback: (tokenResponse) => {
           if (tokenResponse.error) {
@@ -87,51 +88,131 @@ const NewAppointment = () => {
 
   const handleSubmit = async e => {
     e.preventDefault();
-    // insert into supabase
+
+    // Basic validation
+    if (!form.patientId || !form.timeSlot || !form.surgeryDate) {
+      toast({
+        title: 'Datos incompletos',
+        description: 'Selecciona paciente, fecha de cirugía y hora.',
+        status: 'warning',
+        duration: 4000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    // 1) Insert appointment into Supabase
     const record = {
       patient_id: form.patientId,
       appointment_time: form.timeSlot,
-      entry_date: form.entryDate,
-      surgery_date: form.surgeryDate,
-      surgeon: form.surgeon,
-      clinic: form.clinic,
-      procedure: form.procedure,
-      motif: form.motif
+      entry_date: form.entryDate || null,
+      surgery_date: form.surgeryDate || null,
+      surgeon: form.surgeon || null,
+      clinic: form.clinic || null,
+      procedure: form.procedure || null,
+      motif: form.motif || null,
     };
+
     const { data, error } = await supabase
       .from('appointments')
       .insert([record])
-      .select();
+      .select()
+      .single();
+
     if (error) {
       console.error('Insert appointment error:', error);
-      alert('Could not save appointment: ' + error.message);
+      toast({
+        title: 'No se pudo guardar la cita',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
       return;
     }
-    const rec = data[0];
-    const patient = patients.find(p => p.id === rec.patient_id) || {};
-    const patientName = `${patient.first_name} ${patient.last_name}`.trim();
 
-    // parse date/time
+    const rec = data;
+    const patient = patients.find(p => p.id === rec.patient_id) || {};
+    const patientName =
+      `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || 'Paciente';
+
+    // 2) Build Google Calendar event only if we have date & time
+    if (!rec.surgery_date || !rec.appointment_time) {
+      toast({
+        title: 'Cita guardada',
+        description:
+          'La cita se guardó, pero no se pudo crear el evento en el calendario (fecha u hora faltante).',
+        status: 'info',
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
+    }
+
     const [y, m, d] = rec.surgery_date.split('-').map(Number);
     const [h, min] = rec.appointment_time.split(':').map(Number);
     const start = new Date(y, m - 1, d, h, min);
-    const end = new Date(y, m - 1, d, h, min + 30);
+    const end = new Date(y, m - 1, d, h, (min || 0) + 30);
 
     pendingEvent.current = {
       summary: `Cita: ${patientName}`,
-      location: rec.clinic,
-      description: `Paciente: ${patientName}\nDr.: ${rec.surgeon}\nProcedimiento: ${rec.procedure}\nMotivo: ${rec.motif}`,
-      start: { dateTime: start.toISOString(), timeZone: 'America/New_York' },
-      end:   { dateTime: end.toISOString(),   timeZone: 'America/New_York' },
+      location: rec.clinic || '',
+      description: `Paciente: ${patientName}\nDr.: ${rec.surgeon || ''}\nProcedimiento: ${rec.procedure || ''}\nMotivo: ${rec.motif || ''}`,
+      start: { dateTime: start.toISOString(), timeZone: 'America/Los_Angeles' },
+      end: { dateTime: end.toISOString(), timeZone: 'America/Los_Angeles' },
       reminders: {
         useDefault: false,
-        overrides: [{ method: 'popup', minutes: 24 * 60 }]
-      }
+        overrides: [{ method: 'popup', minutes: 24 * 60 }],
+      },
     };
 
-    // trigger Google consent and event insert
+    // 3) If Google Calendar client isn't ready, just save the appointment
+    if (!tokenClient.current || !window.gapi || !window.gapi.client) {
+      console.warn('Google Calendar no está listo, solo se guardó la cita.');
+      toast({
+        title: 'Cita guardada',
+        description:
+          'La cita se guardó, pero Google Calendar aún no está configurado o cargado.',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      // Reset form
+      setForm({
+        timeSlot: '',
+        patientId: '',
+        entryDate: '',
+        surgeryDate: '',
+        surgeon: '',
+        clinic: '',
+        procedure: '',
+        motif: '',
+      });
+      return;
+    }
+
+    // 4) Trigger Google consent and event insert
     tokenClient.current.requestAccessToken({ prompt: 'consent' });
-    alert('Appointment saved and calendar event scheduled!');
+
+    toast({
+      title: 'Cita guardada',
+      description: 'Se guardó la cita y se está creando el evento en Google Calendar.',
+      status: 'success',
+      duration: 5000,
+      isClosable: true,
+    });
+
+    // Reset form after saving
+    setForm({
+      timeSlot: '',
+      patientId: '',
+      entryDate: '',
+      surgeryDate: '',
+      surgeon: '',
+      clinic: '',
+      procedure: '',
+      motif: '',
+    });
   };
 
   return (

@@ -341,7 +341,7 @@ export default function PatientDetails() {
           </Box>
         )}
         <Heading mb={4}>
-          {patient.first_name} {patient.last_name} (ID: {patient.id})
+          {patient.first_name} {patient.last_name}
         </Heading>
 
         <Flex gap={8} flexWrap="wrap">
@@ -406,8 +406,122 @@ export default function PatientDetails() {
                 {patient.history || '—'}
               </Box>
             ) : (
-              <Textarea rows={4} value={edit.history} onChange={e => setEdit(v => ({...v, history: e.target.value}))} />
+              <Textarea
+                rows={4}
+                value={edit.history}
+                onChange={e => setEdit(v => ({ ...v, history: e.target.value }))}
+              />
             )}
+
+            {/* Surgery & Clinic Section */}
+            <Heading size="sm" mt={6} mb={2}>Surgery &amp; Clinic</Heading>
+            <TableContainer mb={4}>
+              <Table variant="simple" size="sm">
+                <Tbody>
+                  <Tr><Th>Origin Location</Th><Td>{patient.origin_location || '—'}</Td></Tr>
+                  <Tr><Th>Companion Name</Th><Td>{patient.companion_name || '—'}</Td></Tr>
+                  <Tr>
+                    <Th>Surgery Date</Th>
+                    <Td>
+                      {patient.surgery_date
+                        ? new Date(patient.surgery_date).toLocaleDateString()
+                        : '—'}
+                    </Td>
+                  </Tr>
+                  <Tr><Th>Clinic</Th><Td>{patient.clinic || '—'}</Td></Tr>
+                  <Tr><Th>Coordinator</Th><Td>{patient.coordinator || '—'}</Td></Tr>
+                  <Tr><Th>Surgeon</Th><Td>{patient.surgeon || '—'}</Td></Tr>
+                  <Tr><Th>Procedures</Th><Td>{patient.procedures || '—'}</Td></Tr>
+                  <Tr><Th>Needs Drains?</Th><Td>{patient.needs_drains || '—'}</Td></Tr>
+                  <Tr><Th>Next-Day Visit Needed?</Th><Td>{patient.needs_next_day_visit || '—'}</Td></Tr>
+                </Tbody>
+              </Table>
+            </TableContainer>
+
+            {/* Stay & Transport Section */}
+            <Heading size="sm" mt={4} mb={2}>Stay &amp; Transport</Heading>
+            <TableContainer mb={4}>
+              <Table variant="simple" size="sm">
+                <Tbody>
+                  <Tr>
+                    <Th>Arrival to Miami</Th>
+                    <Td>
+                      {patient.arrival_miami
+                        ? new Date(patient.arrival_miami).toLocaleDateString()
+                        : '—'}
+                    </Td>
+                  </Tr>
+                  <Tr>
+                    <Th>Arrival to House</Th>
+                    <Td>
+                      {patient.arrival_house
+                        ? new Date(patient.arrival_house).toLocaleDateString()
+                        : '—'}
+                    </Td>
+                  </Tr>
+                  <Tr>
+                    <Th>Departure Date</Th>
+                    <Td>
+                      {patient.departure_date
+                        ? new Date(patient.departure_date).toLocaleDateString()
+                        : '—'}
+                    </Td>
+                  </Tr>
+                  <Tr><Th>Package Selected</Th><Td>{patient.package_selected || '—'}</Td></Tr>
+                  <Tr><Th>Faja Size</Th><Td>{patient.faja_size || '—'}</Td></Tr>
+                  <Tr>
+                    <Th>Transfer Airport → House</Th>
+                    <Td>{patient.transfer_airport_to_house || '—'}</Td>
+                  </Tr>
+                  <Tr>
+                    <Th>Transfer House → Clinic</Th>
+                    <Td>{patient.transfer_house_to_clinic || '—'}</Td>
+                  </Tr>
+                </Tbody>
+              </Table>
+            </TableContainer>
+
+            {/* Health & Safety Section */}
+            <Heading size="sm" mt={4} mb={2}>Health &amp; Safety</Heading>
+            <TableContainer mb={4}>
+              <Table variant="simple" size="sm">
+                <Tbody>
+                  <Tr><Th>Allergies</Th><Td>{patient.allergies || '—'}</Td></Tr>
+                  <Tr><Th>Medical Conditions</Th><Td>{patient.medical_conditions || '—'}</Td></Tr>
+                  <Tr><Th>Current Medications</Th><Td>{patient.current_medications || '—'}</Td></Tr>
+                  <Tr><Th>Emergency Contact</Th><Td>{patient.emergency_contact || '—'}</Td></Tr>
+                  <Tr><Th>Dietary Restrictions</Th><Td>{patient.dietary_restrictions || '—'}</Td></Tr>
+                  <Tr>
+                    <Th>Add Lymphatic Massages</Th>
+                    <Td>{patient.add_lymphatic_massages || '—'}</Td>
+                  </Tr>
+                  <Tr>
+                    <Th>Requested Accessories</Th>
+                    <Td>{patient.requested_accessories || '—'}</Td>
+                  </Tr>
+                </Tbody>
+              </Table>
+            </TableContainer>
+
+            {/* Payment & Consents Section */}
+            <Heading size="sm" mt={4} mb={2}>Payment &amp; Consents</Heading>
+            <TableContainer mb={4}>
+              <Table variant="simple" size="sm">
+                <Tbody>
+                  <Tr><Th>Deposit Paid</Th><Td>{patient.deposit_paid || '—'}</Td></Tr>
+                  <Tr><Th>Consents Sent</Th><Td>{patient.consents_sent || '—'}</Td></Tr>
+                  <Tr><Th>Consents Signed</Th><Td>{patient.consents_signed || '—'}</Td></Tr>
+                  <Tr>
+                    <Th>No Delivery Understood</Th>
+                    <Td>{patient.no_delivery_understood || '—'}</Td>
+                  </Tr>
+                  <Tr>
+                    <Th>Massages Not Included Understood</Th>
+                    <Td>{patient.massages_not_included_understood || '—'}</Td>
+                  </Tr>
+                </Tbody>
+              </Table>
+            </TableContainer>
 
             <Stack direction="row" spacing={4}>
               <Button colorScheme="blue" onClick={openConsent}>
