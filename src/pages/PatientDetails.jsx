@@ -7,6 +7,8 @@ import {
   List, ListItem, Input, Textarea, Stack, Link, Image
 } from '@chakra-ui/react';
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
 export default function PatientDetails() {
   const [patient, setPatient] = useState(null);
   const [documents, setDocuments] = useState([]);
@@ -44,7 +46,7 @@ export default function PatientDetails() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) return '';
-      const r = await fetch(`/api/sign-download?objectKey=${encodeURIComponent(profileKey)}`, {
+      const r = await fetch(`${API_BASE}/sign-download?objectKey=${encodeURIComponent(profileKey)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!r.ok) return '';
@@ -75,7 +77,7 @@ export default function PatientDetails() {
       const token = session?.access_token;
       if (!token) throw new Error('Not signed in');
 
-      const r = await fetch(`/api/sign-download?docId=${encodeURIComponent(docId)}`, {
+      const r = await fetch(`${API_BASE}/sign-download?docId=${encodeURIComponent(docId)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!r.ok) {
@@ -231,7 +233,7 @@ export default function PatientDetails() {
       if (!token) throw new Error('Not signed in');
 
       // 1) Ask server for a presigned PUT and create a pending DB row
-      const signResp = await fetch('/api/sign-upload', {
+      const signResp = await fetch(`${API_BASE}/sign-upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -253,7 +255,7 @@ export default function PatientDetails() {
       if (!put.ok) throw new Error('Upload failed');
 
       // 3) Finalize the DB record (mark as stored, save size)
-      await fetch('/api/finalize-upload', {
+      await fetch(`${API_BASE}/finalize-upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -262,8 +264,26 @@ export default function PatientDetails() {
         body: JSON.stringify({ docId: signResp.docId, sizeBytes: file.size })
       }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
 
-      // 4) Refresh list
+      // 4) Refresh list of documents
       await refreshDocuments();
+
+      // 5) Attach this file as the patient's profile image as well
+      const profileKey = signResp.objectKey || signResp.object_key || signResp.file_url;
+      if (profileKey) {
+        const { error: upErr } = await supabase
+          .from('patients')
+          .update({ profile_url: profileKey })
+          .eq('id', id);
+
+        if (upErr) {
+          console.error('Error updating profile_url:', upErr);
+        } else {
+          // Update local state so the avatar shows the new image immediately
+          const url = await getAvatarUrl(profileKey);
+          setAvatarUrl(url);
+          setPatient(prev => prev ? { ...prev, profile_url: profileKey } : prev);
+        }
+      }
     } catch (err) {
       console.error('Document upload error:', err);
       alert('Error uploading document: ' + (err.message || String(err)));

@@ -61,11 +61,14 @@ async function getUserIdFromRequest(req: express.Request) {
 router.post("/sign-upload", async (req, res) => {
   try {
     const userId = await getUserIdFromRequest(req);
-    const { filename, contentType, patientId } = req.body as {
+    const { filename, contentType, patientId, category } = req.body as {
       filename: string;
       contentType?: string;
       patientId: string;
+      category?: 'avatar' | 'document';
     };
+
+    const fileCategory = category === 'avatar' ? 'avatar' : 'document';
 
     if (!filename || !patientId) {
       throw new Error("filename and patientId are required");
@@ -94,7 +97,10 @@ router.post("/sign-upload", async (req, res) => {
       .replace(/[̀-ͯ]/g, "")
       .replace(/\s+/g, "_")
       .replace(/[^a-zA-Z0-9_.-]/g, "");
-    const objectKey = `patient-docs/${patientId}/${crypto.randomUUID()}-${safeName}`;
+
+    const prefix = fileCategory === 'avatar' ? 'patient-avatars' : 'patient-docs';
+
+    const objectKey = `${prefix}/${patientId}/${crypto.randomUUID()}-${safeName}`;
 
     // presign PUT
     const cmd = new PutObjectCommand({
@@ -110,14 +116,20 @@ router.post("/sign-upload", async (req, res) => {
 
     // create row in patient_documents using the original schema
     const { data, error } = await supabaseAdmin
-      .from("patient_documents")
-      .insert({
-        patient_id: patientId,
-        file_url: objectKey, // store Wasabi key here
-        file_type: fileType,
-      })
-      .select("id")
-      .single();
+        .from("patient_documents")
+        .insert({
+          patient_id: patientId,
+          owner_user_id: userId,
+          object_key: objectKey,
+          bucket: process.env.S3_BUCKET!,
+          content_type: ct,
+          status: 'stored',
+          original_filename: filename,
+          file_url: objectKey, // convenience/legacy
+          file_type: fileType,
+        })
+        .select("id")
+        .single();
 
     if (error) {
       throw error;

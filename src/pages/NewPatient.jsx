@@ -89,6 +89,13 @@ export default function NewPatient() {
       created_by: session?.user?.id || null
     };
 
+    // Normalize empty strings to null so Postgres date/number columns don't get ""
+    Object.keys(record).forEach((key) => {
+      if (record[key] === '') {
+        record[key] = null;
+      }
+    });
+
     const { data: inserted, error: insertErr } = await supabase
       .from('patients')
       .insert([record])
@@ -107,7 +114,7 @@ export default function NewPatient() {
     }
 
     // helper to sign + upload + finalize one file
-    async function uploadViaPresign(file, patientId) {
+    async function uploadViaPresign(file, patientId, category = 'document') {
       // 1) Call /sign-upload
       const resp = await fetch(`${API_BASE}/sign-upload`, {
         method: 'POST',
@@ -118,7 +125,8 @@ export default function NewPatient() {
         body: JSON.stringify({
           filename: file.name,
           contentType: file.type || 'application/octet-stream',
-          patientId
+          patientId,
+          category,
         })
       });
 
@@ -191,7 +199,7 @@ export default function NewPatient() {
       // 2) Upload profile photo to Wasabi (optional)
       const photoFile = formData.get('patientPhoto');
       if (photoFile && photoFile.name) {
-        const signed = await uploadViaPresign(photoFile, patientId);
+        const signed = await uploadViaPresign(photoFile, patientId, 'avatar');
         const objectKey = signed.objectKey || signed.object_key || signed.Key;
         if (!objectKey) {
           console.error('[photo] No objectKey returned, not updating profile_url:', signed);
@@ -215,7 +223,7 @@ export default function NewPatient() {
       for (const file of docFiles) {
         if (!file || !file.name) continue;
         try {
-          await uploadViaPresign(file, patientId);
+          await uploadViaPresign(file, patientId, 'document');
           // No extra insert needed; your backend already created a row in patient_documents on sign
         } catch (docErr) {
           console.error('Document upload error:', docErr);

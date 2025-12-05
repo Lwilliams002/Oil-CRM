@@ -17,7 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { FaEye, FaTrash } from 'react-icons/fa';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5174';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export default function AllPatients() {
   const navigate = useNavigate();
@@ -29,7 +29,7 @@ export default function AllPatients() {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) throw new Error('Not authenticated');
-        const url = `${API}/api/patients`;
+        const url = `${API_BASE}/patients`;
         const res = await fetch(url, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -53,16 +53,26 @@ export default function AllPatients() {
 
   // Delete patient handler
   const handleDelete = async (id) => {
+    console.log('[AllPatients] delete click for id:', id);
     if (!window.confirm('Are you sure you want to delete this patient?')) return;
-    const { error } = await supabase
-      .from('patients')
-      .delete()
-      .eq('id', id);
-    if (error) {
-      console.error('Delete error:', error);
-      alert('Could not delete patient: ' + error.message);
-    } else {
-      setPatients(patients.filter(p => p.id !== id));
+
+    try {
+      const { data, error } = await supabase
+          .from('patients')
+          .delete()
+          .eq('id', id);
+
+      console.log('[AllPatients] delete result:', { data, error });
+
+      if (error) {
+        console.error('Delete error:', error);
+        alert('Could not delete patient: ' + error.message);
+      } else {
+        setPatients(prev => prev.filter(p => p.id !== id));
+      }
+    } catch (err) {
+      console.error('Delete threw exception:', err);
+      alert('Could not delete patient (exception): ' + (err.message || String(err)));
     }
   };
 
@@ -72,7 +82,7 @@ export default function AllPatients() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) return '';
-      const res = await fetch(`${API}/api/sign-download?objectKey=${encodeURIComponent(profileKey)}`, {
+      const res = await fetch(`${API_BASE}/sign-download?objectKey=${encodeURIComponent(profileKey)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) return '';
