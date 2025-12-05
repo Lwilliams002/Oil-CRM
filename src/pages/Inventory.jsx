@@ -169,6 +169,11 @@ export default function Inventory() {
 
     // insert new record (day stays as-is)
     const handleAdd = async () => {
+        // use the currently selected 14‑day period start if available,
+        // otherwise fall back to the entry's own day
+        const period_start =
+            periodStart || newItem.day || null;
+
         const payload = {
             day:      newItem.day,
             deposit:    parseFloat(newItem.deposit)    || 0,
@@ -178,7 +183,9 @@ export default function Inventory() {
             gastos:     parseFloat(newItem.gastos)     || 0,
             salario:    parseFloat(newItem.salario)    || 0,
             masajes:    parseFloat(newItem.masajes)    || 0,
+            period_start,
         };
+
         const { error } = await supabase.from('inventory').insert([payload]);
         if (error) {
             console.error('Error adding inventory item:', error);
