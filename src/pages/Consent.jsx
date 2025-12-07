@@ -15,6 +15,8 @@ import {
   Stack,
 } from '@chakra-ui/react';
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
 // robust JSON fetch helper
 async function fetchJSON(url, options) {
   const res = await fetch(url, options);
@@ -128,7 +130,7 @@ export default function Consent() {
       if (!token) throw new Error('No hay sesión activa. Inicia sesión nuevamente.');
 
       // 2) Ask server for a presigned URL (this also creates the DB row for patient_documents)
-      const signResp = await fetchJSON('/api/sign-upload', {
+      const signResp = await fetchJSON(`${API_BASE}/sign-upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -150,7 +152,7 @@ export default function Consent() {
       }
 
       // 4) Finalize the upload (marks the DB row as stored, size, etc.)
-      await fetchJSON('/api/finalize-upload', {
+      await fetchJSON(`${API_BASE}/finalize-upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

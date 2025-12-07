@@ -400,15 +400,27 @@ export default function PatientDetails() {
     e.preventDefault();
     if (!newLog.trim()) return;
 
-    const {error: insertError} = await supabase
-        .from('patient_logs')
-        .insert([{
-          patient_id: id,
-          entry: newLog,
-          blood_pressure: bloodPressure,
-          oxygen_level: oxygenLevel,
-          temperature: temperature
-        }]);
+    // Normalize numeric fields so we don't send "" to numeric columns
+    const oxygenValue =
+      oxygenLevel === '' || oxygenLevel == null
+        ? null
+        : Number(oxygenLevel);
+    const temperatureValue =
+      temperature === '' || temperature == null
+        ? null
+        : Number(temperature);
+
+    const payload = {
+      patient_id: id,
+      entry: newLog,
+      blood_pressure: bloodPressure || null,
+      oxygen_level: oxygenValue,
+      temperature: temperatureValue,
+    };
+
+    const { error: insertError } = await supabase
+      .from('patient_logs')
+      .insert([payload]);
 
     if (insertError) {
       console.error('Error inserting log:', insertError);
@@ -423,11 +435,11 @@ export default function PatientDetails() {
     setShowLogForm(false);
 
     // Refresh logs
-    const {data: logsData, error: logsError} = await supabase
-        .from('patient_logs')
-        .select('*')
-        .eq('patient_id', id)
-        .order('created_at', {ascending: false});
+    const { data: logsData, error: logsError } = await supabase
+      .from('patient_logs')
+      .select('*')
+      .eq('patient_id', id)
+      .order('created_at', { ascending: false });
 
     if (logsError) {
       console.error('Error fetching logs:', logsError);
